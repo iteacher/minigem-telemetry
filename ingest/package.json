@@ -1,0 +1,20 @@
+{
+  "name": "jwc-telemetry-ingest",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node dist/server.js",
+    "build": "tsc -p .",
+    "dev": "node --watch dist/server.js"
+  },
+  "dependencies": {
+    "fastify": "^4.28.1",
+    "@fastify/rate-limit": "^8.0.0",
+    "maxmind": "^4.3.9",
+    "pg": "^8.11.5"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4",
+    "@types/pg": "^8.10.2"
+  }
+}

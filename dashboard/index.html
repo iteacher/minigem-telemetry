@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Telemetry Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    :root{ --bg:#0b1020; --card:#111827; --muted:#9aa7bd; --text:#e6edf6; --grid:#22304a; --accent:#60a5fa; --accent2:#f472b6; }
+    html,body{height:100%}
+    body{margin:0;background:var(--bg);color:var(--text);font-family:"Google Sans","Inter","Segoe UI",system-ui,Roboto,Helvetica,Arial,sans-serif}
+    .wrap{max-width:1440px;margin:0 auto;padding:36px}
+    h1{margin:0 0 10px;font-weight:800;letter-spacing:.2px}
+    .subtitle{margin:0 0 24px;color:var(--muted);font-size:14px}
+    .section-title{margin:28px 0 14px;font-weight:800;letter-spacing:.3px;text-transform:uppercase;color:#c7d2fe}
+    .cards{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));margin:12px 0 24px}
+    .grid{display:grid;gap:20px;grid-template-columns:repeat(auto-fit,minmax(380px,1fr))}
+    .card{background:var(--card);border-radius:16px;padding:20px;border:1px solid #1f2a44;box-shadow:0 8px 30px rgba(0,0,0,.28)}
+    .kpi{display:flex;flex-direction:column;position:relative;overflow:hidden}
+    .kpi::before{content:"";position:absolute;inset:0 0 auto 0;height:4px;background:linear-gradient(90deg,#60a5fa,#a78bfa,#f472b6);opacity:.9}
+    .kpi h3{margin:8px 0 6px;color:var(--muted);font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+    .kpi .v{font-size:30px;font-weight:800}
+    .panel{margin-bottom:22px}
+    .panel .panel-head{display:flex;align-items:baseline;gap:10px;margin:0 0 10px}
+    .panel .panel-title{font-weight:800;letter-spacing:.3px}
+    .panel .panel-sub{color:var(--muted);font-size:12px}
+    table{width:100%;border-collapse:separate;border-spacing:0 8px}
+    th,td{padding:12px 14px;text-align:left}
+    th{color:#93a6c8;font-weight:700;font-size:12px;letter-spacing:.03em;text-transform:uppercase}
+    tbody tr{background:#0f1628;border:1px solid #1f2a44;border-radius:12px}
+    tbody tr td:first-child{border-top-left-radius:12px;border-bottom-left-radius:12px}
+    tbody tr td:last-child{border-top-right-radius:12px;border-bottom-right-radius:12px}
+    footer{margin-top:22px;color:var(--muted);font-size:12px}
+    canvas{width:100%}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+  <h1>Telemetry Dashboard</h1>
+  <p class="subtitle">Last <span id="windowDays">7</span> days • auto‑updates every 15s.</p>
+
+    <h2 class="section-title">Overall Analyzed Requests</h2>
+    <div class="cards">
+      <div class="card kpi"><h3>Total events</h3><div id="kpi-total" class="v">0</div></div>
+      <div class="card kpi"><h3>Unique users</h3><div id="kpi-uniques" class="v">0</div></div>
+      <div class="card kpi"><h3>OS types</h3><div id="kpi-ostypes" class="v">0</div></div>
+      <div class="card kpi"><h3>VS Code versions</h3><div id="kpi-vstypes" class="v">0</div></div>
+      <div class="card kpi"><h3>Extension versions</h3><div id="kpi-exttypes" class="v">0</div></div>
+      <div class="card kpi"><h3>Runs started</h3><div id="kpi-started" class="v">0</div></div>
+      <div class="card kpi"><h3>Runs completed</h3><div id="kpi-completed" class="v">0</div></div>
+      <div class="card kpi"><h3>Runtime error rate</h3><div id="kpi-rt-rate" class="v">0%</div></div>
+      <div class="card kpi"><h3>Median duration</h3><div id="kpi-med" class="v">0 ms</div></div>
+      <div class="card kpi"><h3>Interactive runs</h3><div id="kpi-interactive" class="v">0%</div></div>
+      <div class="card kpi"><h3>Truncation rate</h3><div id="kpi-trunc" class="v">0%</div></div>
+    </div>
+
+    <div class="card panel">
+      <div class="panel-head"><div class="panel-title">Daily Overview</div><div class="panel-sub">Hits vs Visitors</div></div>
+  <canvas id="dailyChart" height="170"></canvas>
+    </div>
+
+    <h2 class="section-title">Operating Systems</h2>
+    <div class="card panel">
+      <div class="panel-head"><div class="panel-title">OS by Day</div><div class="panel-sub">Daily hits by OS</div></div>
+  <canvas id="osSeriesChart" height="170"></canvas>
+    </div>
+
+    <h2 class="section-title">Geo Location</h2>
+    <div class="card panel">
+      <div class="panel-head"><div class="panel-title">Continents</div><div class="panel-sub">Hits vs Visitors</div></div>
+  <canvas id="geoContChart" height="170"></canvas>
+    </div>
+    <div class="card panel">
+      <div class="panel-head"><div class="panel-title">Top Countries</div><div class="panel-sub">By hits</div></div>
+      <table><thead><tr><th>Country</th><th>Hits</th><th>Visitors</th></tr></thead><tbody id="tbl-countries"></tbody></table>
+    </div>
+
+    <h2 class="section-title">Time Distribution</h2>
+    <div class="card panel">
+      <div class="panel-head"><div class="panel-title">Hourly</div><div class="panel-sub">UTC</div></div>
+  <canvas id="hourlyHvChart" height="170"></canvas>
+    </div>
+
+    <h2 class="section-title">Details</h2>
+    <div class="grid">
+  <div class="card panel"><div class="panel-head"><div class="panel-title">Events</div></div><canvas id="eventsChart" height="150"></canvas></div>
+  <div class="card panel"><div class="panel-head"><div class="panel-title">OS</div></div><canvas id="osChart" height="150"></canvas></div>
+  <div class="card panel"><div class="panel-head"><div class="panel-title">VS Code versions</div></div><canvas id="vscodeChart" height="150"></canvas></div>
+  <div class="card panel"><div class="panel-head"><div class="panel-title">Extension versions</div></div><canvas id="extChart" height="150"></canvas></div>
+  <div class="card panel"><div class="panel-head"><div class="panel-title">Day of Week</div></div><canvas id="dowChart" height="140"></canvas></div>
+  <div class="card panel"><div class="panel-head"><div class="panel-title">Duration Histogram</div></div><canvas id="durHistChart" height="140"></canvas></div>
+  <div class="card panel"><div class="panel-head"><div class="panel-title">Exit Codes</div></div><canvas id="exitChart" height="140"></canvas></div>
+  <div class="card panel"><div class="panel-head"><div class="panel-title">Output Size</div></div><canvas id="outBucketChart" height="140"></canvas></div>
+  <div class="card panel"><div class="panel-head"><div class="panel-title">Errors</div></div><canvas id="errorsChart" height="140"></canvas></div>
+  <div class="card panel"><div class="panel-head"><div class="panel-title">Top Runtime Exceptions</div></div><canvas id="topExChart" height="140"></canvas></div>
+    </div>
+
+    <h2 class="section-title">Tables</h2>
+    <div class="grid">
+      <div class="card panel">
+        <div class="panel-head"><div class="panel-title">Top Events</div><div class="panel-sub">By hits</div></div>
+        <table><thead><tr><th>Event</th><th>Count</th><th>%</th></tr></thead><tbody id="tbl-events"></tbody></table>
+      </div>
+      <div class="card panel">
+        <div class="panel-head"><div class="panel-title">Extension Versions</div><div class="panel-sub">By hits</div></div>
+        <table><thead><tr><th>Version</th><th>Count</th><th>%</th></tr></thead><tbody id="tbl-ext"></tbody></table>
+      </div>
+      <div class="card panel">
+        <div class="panel-head"><div class="panel-title">Top Exceptions</div><div class="panel-sub">Runtime</div></div>
+        <table><thead><tr><th>Exception Hash</th><th>Count</th><th>%</th></tr></thead><tbody id="tbl-exc"></tbody></table>
+      </div>
+    </div>
+
+    <footer>
+      <span id="meta">–</span>
+      <div style="margin-top:6px">
+        © 2025 Minigem. All rights reserved. Minigem Telemetry Tools is proprietary and confidential; for internal use only. No external distribution or licensing without prior written consent.
+      </div>
+    </footer>
+  </div>
+
+  <script>
+  const $ = s=>document.querySelector(s);
+    const theme = getComputedStyle(document.documentElement);
+    const gridColor = theme.getPropertyValue('--grid');
+    const axisColor = theme.getPropertyValue('--muted');
+
+    const BASE_COLORS = ['#60a5fa','#22d3ee','#34d399','#f59e0b','#f472b6','#a78bfa','#f87171','#2dd4bf','#fb7185','#c084fc','#fde047','#10b981','#ef4444'];
+    const hexToRgba = (hex,a)=>{ const v=hex.replace('#',''); const bigint=parseInt(v,16); const r=(bigint>>16)&255,g=(bigint>>8)&255,b=bigint&255; return `rgba(${r},${g},${b},${a})`; };
+    const nfCompact = new Intl.NumberFormat(undefined,{ notation:'compact' });
+
+    function colorSet(n, a=0.75){ const fill=[], stroke=[]; for (let i=0;i<n;i++){ const c=BASE_COLORS[i%BASE_COLORS.length]; stroke.push(c); fill.push(hexToRgba(c,a)); } return { fill, stroke }; }
+
+    const baseScales = (titleY='Count') => ({
+      y:{ beginAtZero:true, grid:{color:gridColor}, ticks:{color:axisColor, callback:(v)=>nfCompact.format(v) }, title:{ display:true, text:titleY, color:axisColor } },
+      x:{ grid:{color:gridColor}, ticks:{color:axisColor} }
+    });
+
+    const common = { responsive:true, scales: baseScales(), plugins:{ legend:{ labels:{ color:axisColor } }, tooltip:{ backgroundColor:'#0f172a', titleColor:'#e2e8f0', bodyColor:'#cbd5e1', borderColor:'#334155', borderWidth:1 }, title:{ display:false, color:'#d1d5db', font:{ weight:'bold' } } } };
+
+    const withTitle = (cfg, title) => { cfg.options = cfg.options || {}; cfg.options.plugins = cfg.options.plugins || {}; cfg.options.plugins.title = { display:true, text:title, color:'#c7d2fe' }; return cfg; };
+
+    const mkBar = (labels, data, label='Count', title='') => { const cols=colorSet(data.length); const cfg={ type:'bar', data:{ labels, datasets:[{ label, data, backgroundColor:cols.fill, borderColor:cols.stroke, borderWidth:1, borderRadius:6 }] }, options: { ...common, scales: baseScales(label) } }; return title?withTitle(cfg,title):cfg; };
+
+    const mkLine = (labels, data, label, color='#60a5fa', title='') => { const cfg={ type:'line', data:{ labels, datasets:[{ label, data, borderColor: color, backgroundColor: hexToRgba(color,.2), fill:true, tension:.28, pointRadius:2, pointHoverRadius:4 }] }, options: { ...common, scales: baseScales(label) } }; return title?withTitle(cfg,title):cfg; };
+
+    const mkLineMulti = (labels, series, title='') => { const cfg={ type:'line', data:{ labels, datasets: series.map((s,i)=>({ label:s.key, data:s.data, borderColor:BASE_COLORS[i%BASE_COLORS.length], backgroundColor: hexToRgba(BASE_COLORS[i%BASE_COLORS.length], .18), fill:true, tension:.25, pointRadius:1.5 })) }, options: { ...common, scales: baseScales('Hits') } }; return title?withTitle(cfg,title):cfg; };
+
+    const mkBarDual = (labels, hits, visitors, title='') => { const cfg={ type:'bar', data:{ labels, datasets:[
+      { label:'Hits', data:hits, backgroundColor:hexToRgba('#60a5fa',.75), borderColor:'#60a5fa', borderWidth:1, borderRadius:6, yAxisID:'y' },
+      { label:'Visitors', data:visitors, backgroundColor:hexToRgba('#f472b6',.75), borderColor:'#f472b6', borderWidth:1, borderRadius:6, yAxisID:'y1' }
+    ] }, options: { ...common, scales:{ ...baseScales('Hits'), y1:{ position:'right', beginAtZero:true, grid:{ drawOnChartArea:false, color:gridColor }, ticks:{ color:axisColor, callback:(v)=>nfCompact.format(v) }, title:{ display:true, text:'Visitors', color:axisColor } } } } }; return title?withTitle(cfg,title):cfg; };
+
+    const mkLineDual = (labels, hits, visitors, title='') => { const cfg={ type:'line', data:{ labels, datasets:[
+      { label:'Hits', data:hits, borderColor:'#60a5fa', backgroundColor:hexToRgba('#60a5fa',.2), fill:true, tension:.25, yAxisID:'y' },
+      { label:'Visitors', data:visitors, borderColor:'#f472b6', backgroundColor:hexToRgba('#f472b6',.18), fill:true, tension:.25, yAxisID:'y1' }
+    ] }, options: { ...common, scales:{ ...baseScales('Hits'), y1:{ position:'right', beginAtZero:true, grid:{ drawOnChartArea:false, color:gridColor }, ticks:{ color:axisColor, callback:(v)=>nfCompact.format(v) }, title:{ display:true, text:'Visitors', color:axisColor } } } } }; return title?withTitle(cfg,title):cfg; };
+
+    let charts = {};
+    function upsert(id, cfg) { if (!charts[id]) charts[id] = new Chart($(id), cfg); else { charts[id].data = cfg.data; charts[id].options = { ...charts[id].options, ...cfg.options }; charts[id].update(); } }
+
+    function toObjSorted(obj){ const ent = Object.entries(obj||{}).sort((a,b)=>b[1]-a[1]); return { labels: ent.map(e=>e[0]), data: ent.map(e=>e[1]) }; }
+    function fillTable(tbodyId, rows){ const el=$(tbodyId); el.innerHTML = (rows||[]).map(r=>`<tr><td>${r.key}</td><td>${r.count.toLocaleString()}</td><td>${Math.round(r.pct*100)}%</td></tr>`).join(''); }
+
+    async function load(){
+  const res=await fetch('/stats');
+      if(!res.ok){ $('#meta').textContent='Failed to load stats ('+res.status+')'; return; }
+      const s=await res.json();
+      $('#windowDays').textContent = s.windowDays || 7;
+
+      // KPIs
+      $('#kpi-total').textContent = (s.total||0).toLocaleString();
+      $('#kpi-uniques').textContent = (s.uniques||0).toLocaleString();
+      $('#kpi-ostypes').textContent = s.osTypes||0;
+      $('#kpi-vstypes').textContent = s.vscodeTypes||0;
+      $('#kpi-exttypes').textContent = s.extTypes||0;
+      $('#kpi-started').textContent = s.runs?.started||0;
+      $('#kpi-completed').textContent = s.runs?.completed||0;
+      $('#kpi-rt-rate').textContent = Math.round((s.errors?.runtimeRate||0)*100)+'%';
+      $('#kpi-med').textContent = Math.round(s.durations?.median||0)+' ms';
+      $('#kpi-interactive').textContent = Math.round((s.interactiveRate||0)*100)+'%';
+      $('#kpi-trunc').textContent = Math.round((s.truncationRate||0)*100)+'%';
+
+      // Daily dual-axis
+      upsert('#dailyChart', mkLineDual(s.daily?.dates||[], s.daily?.hits||[], s.daily?.uniques||[], 'Daily: Hits vs Visitors'));
+
+      // OS multi-series
+      upsert('#osSeriesChart', mkLineMulti(s.dailyOs?.labels||[], s.dailyOs?.series||[], 'Operating Systems (Daily Hits)'));
+
+      // Geo
+      const contLabels = Object.keys(s.geo?.byContinent||{});
+      const contHits = contLabels.map(k=>s.geo.byContinent[k].hits||0);
+      const contVisitors = contLabels.map(k=>s.geo.byContinent[k].visitors||0);
+      upsert('#geoContChart', mkBarDual(contLabels, contHits, contVisitors, 'Continents: Hits vs Visitors'));
+      const countries = s.geo?.byCountry||{};
+      const rows = Object.entries(countries).map(([k,v])=>({ key:k, hits:v.hits||0, visitors:v.visitors||0 }))
+        .sort((a,b)=>b.hits-a.hits).slice(0,20)
+        .map(r=>`<tr><td>${r.key}</td><td>${r.hits.toLocaleString()}</td><td>${r.visitors.toLocaleString()}</td></tr>`).join('');
+      $('#tbl-countries').innerHTML = rows || '';
+
+      // Hourly dual-axis
+      const hours = Array.from({length:24},(_,i)=>i.toString().padStart(2,'0'));
+      upsert('#hourlyHvChart', mkLineDual(hours, s.hourly||[], s.hourlyVisitors||[], 'Hourly (UTC): Hits vs Visitors'));
+
+      // Summary bar charts with titles
+      const ev = toObjSorted(s.byEvent); upsert('#eventsChart', mkBar(ev.labels, ev.data, 'Count', 'Events'));
+      const os = toObjSorted(s.byOs); upsert('#osChart', mkBar(os.labels, os.data, 'Count', 'Operating Systems'));
+      const vs = toObjSorted(s.byVscode); upsert('#vscodeChart', mkBar(vs.labels, vs.data, 'Count', 'VS Code Versions'));
+      const ex = toObjSorted(s.byExt); upsert('#extChart', mkBar(ex.labels, ex.data, 'Count', 'Extension Versions'));
+
+      const dowL = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']; upsert('#dowChart', mkBar(dowL, s.dow||[], 'Count', 'Day of Week'));
+
+      upsert('#durHistChart', mkBar((s.durations?.hist?.labels)||[], (s.durations?.hist?.values)||[], 'Count', 'Run Duration Histogram'));
+      const exits = toObjSorted(s.exitCodes); upsert('#exitChart', mkBar(exits.labels, exits.data, 'Count', 'Exit Codes'));
+      const outb = toObjSorted(s.outputBuckets); upsert('#outBucketChart', mkBar(outb.labels, outb.data, 'Count', 'Output Size Buckets'));
+      upsert('#errorsChart', mkBar(['compile','runtime'], [s.errors?.compile||0, s.errors?.runtime||0], 'Count', 'Errors'));
+      const tex = toObjSorted(s.topExceptions); upsert('#topExChart', mkBar(tex.labels, tex.data, 'Count', 'Top Runtime Exceptions'));
+
+      // Tables
+      if (s.tables) {
+        fillTable('#tbl-events', s.tables.eventsTop || []);
+        fillTable('#tbl-ext', s.tables.extTop || []);
+        fillTable('#tbl-exc', s.tables.exceptionsTop || []);
+      } else {
+        // Fallback if older payload without `tables` field
+        const total = s.total || 0;
+        const mk = (obj)=>Object.entries(obj||{}).sort((a,b)=>b[1]-a[1]).slice(0,20).map(([key,count])=>({ key, count, pct: total? (count/total):0 }));
+        fillTable('#tbl-events', mk(s.byEvent));
+        fillTable('#tbl-ext', mk(s.byExt));
+        fillTable('#tbl-exc', mk(s.topExceptions));
+      }
+
+      $('#meta').textContent = `Window: ${s.from} → ${s.to} • Updated ${new Date().toLocaleTimeString()}`;
+    }
+
+    load();
+    setInterval(load,15000);
+  </script>
+</body>
+</html>
