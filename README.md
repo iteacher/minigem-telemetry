@@ -1,5 +1,8 @@
 # Minigem Telemetry Tool
 
+[![MIT License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![GitHub](https://img.shields.io/github/license/iteacher/minigem-telemetry)](https://github.com/iteacher/minigem-telemetry/blob/main/LICENSE)
+
 A high-performance telemetry ingestion server that collects, stores, and analyzes application usage data. Built with Node.js/TypeScript and PostgreSQL, it provides real-time analytics and dashboards for monitoring application performance and user behavior.
 
 ## Features
