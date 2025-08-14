@@ -3,8 +3,6 @@ import rateLimit from '@fastify/rate-limit';
 import { CONFIG } from './config.js';
 import { validateEnvelope, validateEvent, normalizeEvent } from './validate.js';
 import { initGeo, lookup } from './geo.js';
-import { lineForEvent, appendLine, appendJsonEvent } from './transform.js';
-import { readWindowStats } from './stats.js';
 import { dbEnabled, dbInit, dbInsertEvent, dbReadStats, dbHealth, dbRecent, dbCounts } from './db.js';
 
 function h(req: FastifyRequest, name: string): string | undefined {
@@ -84,15 +82,16 @@ async function main() {
 
   app.get('/stats', async (req: FastifyRequest, reply: FastifyReply) => {
     try {
-  // Public stats endpoint: no auth required.
-      if (dbEnabled()) {
-        const q: any = (req as any).query || {};
-        const from = typeof q.from === 'string' ? q.from : undefined;
-        const to = typeof q.to === 'string' ? q.to : undefined;
-        const data = await dbReadStats(CONFIG.STATS_WINDOW_DAYS, from, to);
-        if (data) return data; // minimal DB stats
+      // Public stats endpoint: DB is the single source of truth.
+      if (!dbEnabled()) {
+        return reply.code(503).send({ error: 'db_disabled', message: 'Database not configured. Stats require DB-only mode.' });
       }
-      return readWindowStats();
+      const q: any = (req as any).query || {};
+      const from = typeof q.from === 'string' ? q.from : undefined;
+      const to = typeof q.to === 'string' ? q.to : undefined;
+      const data = await dbReadStats(CONFIG.STATS_WINDOW_DAYS, from, to);
+      if (data) return data; // DB-backed stats
+      return reply.code(204).send();
     } catch (e) {
       (req as any).log?.error?.(e);
       const today = new Date().toISOString().slice(0,10);
@@ -124,6 +123,10 @@ async function main() {
 
   app.post('/t', async (req: FastifyRequest, reply: FastifyReply) => {
     try {
+      // Ingest requires DB; no file fallbacks.
+      if (!dbEnabled()) {
+        return reply.code(503).send({ error: 'db_disabled', message: 'Database not configured. Ingestion requires DB-only mode.' });
+      }
       const raw: any = (req as any).body;
       const schema = typeof raw?.schema === 'string' ? raw.schema.trim().toLowerCase() : '';
       if (schema !== 'jwc.v1') {
@@ -139,15 +142,11 @@ async function main() {
       for (const evRaw of batchRaw) {
         const ev = normalizeEvent(evRaw);
         if (!ev || !validateEvent(ev)) { skipped++; (req as any).log.warn({ evRaw }, 'event skipped: invalid'); continue; }
-        try {
-          if (dbEnabled()) await dbInsertEvent(ev, geo);
-        } catch (e) {
+        try { await dbInsertEvent(ev, geo); accepted++; }
+        catch (e) {
           (req as any).log.error({ err: String(e), ev }, 'db insert failed');
           skipped++; continue;
         }
-        try { appendLine(lineForEvent(ev, geo)); } catch {}
-        try { appendJsonEvent(ev, geo); } catch {}
-        accepted++;
       }
       return { ok: true, accepted, skipped };
     } catch (e) {
