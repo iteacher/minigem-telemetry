@@ -41,6 +41,21 @@ export interface WindowStatsResult {
     byCountry: Record<string, { hits: number; visitors: number }>;
   };
   hourlyVisitors: number[];
+  // New teacher-focused fields
+  dailyLearningOutcomes?: Record<string, Record<string, number>>; // YYYY-MM-DD -> exit code -> count
+  sessions?: {
+    successTop: Array<TopSession>;
+    frustratedTop: Array<TopSession>;
+  };
+}
+
+export interface TopSession {
+  student: string;         // masked anon id, e.g., "Student #a1b2c3"
+  ts: string;              // ISO timestamp (UTC)
+  durationMs: number;      // run duration
+  interactive: boolean;    // used Scanner / input
+  exit: number;            // exit code
+  outputBucket?: string;   // optional output size bucket
 }
 
 const CONTINENT: Record<string,string> = {
@@ -111,6 +126,15 @@ export function readWindowStats(): WindowStatsResult {
   const byCountry: Record<string, { hits: number; visitors: number }> = {};
   const byContinent: Record<string, { hits: number; visitors: number }> = {};
   const seenHourAnon = new Map<number, Set<string>>();
+  const dailyLearningOutcomes: Record<string, Record<string, number>> = {};
+
+  const sessionsSuccess: TopSession[] = [];
+  const sessionsFrustrated: TopSession[] = [];
+
+  const mask = (anon?: string) => {
+    if (!anon || anon.length < 6) return 'Student #—';
+    return `Student #${anon.slice(-6)}`;
+  };
 
   for (let di = 0; di < days.length; di++) {
     const day = days[di];
@@ -180,6 +204,24 @@ export function readWindowStats(): WindowStatsResult {
         const bucket = e.m?.cumulativeBytesBucket || '-'; outputBuckets[bucket] = (outputBuckets[bucket] || 0) + 1;
         if (e.m?.scannerUsage === true) interactive++;
         if (e.m?.truncatedOutput === true) truncations++;
+
+        // Aggregate daily learning outcomes
+        const keyDay = day; // current loop day string
+        const exKey = String(exit);
+        if (!dailyLearningOutcomes[keyDay]) dailyLearningOutcomes[keyDay] = {};
+        dailyLearningOutcomes[keyDay][exKey] = (dailyLearningOutcomes[keyDay][exKey] || 0) + 1;
+
+        // Collect ranked session candidates
+        const sess: TopSession = {
+          student: mask(e.anon),
+          ts: new Date(dt.getTime()).toISOString(),
+          durationMs: dur,
+          interactive: e.m?.scannerUsage === true,
+          exit: Number(exit),
+          outputBucket: bucket
+        };
+        if (sess.exit === 0) sessionsSuccess.push(sess);
+        if (sess.exit === 130) sessionsFrustrated.push(sess);
       }
       if (evt === 'java.run.error') {
         const phase = e.m?.phase || 'runtime';
@@ -210,6 +252,20 @@ export function readWindowStats(): WindowStatsResult {
 
   const dailyOs = { labels: days, series: Array.from(dailyOsSeries.entries()).map(([key, data]) => ({ key, data })) };
 
+  // Rank sessions
+  sessionsSuccess.sort((a,b)=>{
+    const ai = a.interactive ? 1 : 0;
+    const bi = b.interactive ? 1 : 0;
+    if (bi !== ai) return bi - ai; // interactive first
+    return b.durationMs - a.durationMs; // longer durations next
+  });
+  sessionsFrustrated.sort((a,b)=>{
+    const ai = a.interactive ? 1 : 0;
+    const bi = b.interactive ? 1 : 0;
+    if (ai !== bi) return ai - bi; // non-interactive first
+    return a.durationMs - b.durationMs; // shortest durations first
+  });
+
   return {
     from: days[0],
     to: days[days.length - 1],
@@ -237,6 +293,11 @@ export function readWindowStats(): WindowStatsResult {
     topExceptions,
     geo: { byContinent, byCountry },
     hourlyVisitors,
+    dailyLearningOutcomes,
+    sessions: {
+      successTop: sessionsSuccess.slice(0, 20),
+      frustratedTop: sessionsFrustrated.slice(0, 20)
+    },
     tables: {
       eventsTop: toTopRows(byEvent, total),
       extTop: toTopRows(byExt, total),
