@@ -90,6 +90,9 @@ async function main() {
       const from = typeof q.from === 'string' ? q.from : undefined;
       const to = typeof q.to === 'string' ? q.to : undefined;
       const data = await dbReadStats(CONFIG.STATS_WINDOW_DAYS, from, to);
+      if (CONFIG.DEBUG_STATS_TRACE && q.debug === '1') {
+        (req as any).log?.info?.({ from, to, trace: (data as any)?._trace }, 'stats trace');
+      }
       if (data) return data; // DB-backed stats
       return reply.code(204).send();
     } catch (e) {
@@ -142,12 +145,13 @@ async function main() {
       for (const evRaw of batchRaw) {
         const ev = normalizeEvent(evRaw);
         if (!ev || !validateEvent(ev)) { skipped++; (req as any).log.warn({ evRaw }, 'event skipped: invalid'); continue; }
-        try { await dbInsertEvent(ev, geo); accepted++; }
+        try { await dbInsertEvent(ev, geo); accepted++; (req as any).log?.info?.({ ev, geo }, 'ingest: inserted'); }
         catch (e) {
           (req as any).log.error({ err: String(e), ev }, 'db insert failed');
           skipped++; continue;
         }
       }
+      (req as any).log?.info?.({ accepted, skipped }, 'ingest: batch result');
       return { ok: true, accepted, skipped };
     } catch (e) {
       (req as any).log.error(e);
