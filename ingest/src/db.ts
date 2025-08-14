@@ -39,6 +39,7 @@ export async function dbInit(): Promise<void> {
         duration_ms bigint,
         wait_ms_total bigint,
         exit_code integer,
+        session_id text,
         out_bytes_bucket text,
         scanner_usage boolean,
         truncated_output boolean,
@@ -52,7 +53,8 @@ export async function dbInit(): Promise<void> {
       create index if not exists idx_events_os on telemetry_events (os);
       create index if not exists idx_events_ext on telemetry_events (ext);
       create index if not exists idx_events_vscode on telemetry_events (vscode);
-      create index if not exists idx_events_anon on telemetry_events (anon);
+  create index if not exists idx_events_anon on telemetry_events (anon);
+  create index if not exists idx_events_session on telemetry_events (session_id);
     `);
 
     // Ensure columns exist if table predated this migration
@@ -61,6 +63,7 @@ export async function dbInit(): Promise<void> {
         add column if not exists duration_ms bigint,
         add column if not exists wait_ms_total bigint,
         add column if not exists exit_code integer,
+        add column if not exists session_id text,
         add column if not exists out_bytes_bucket text,
         add column if not exists scanner_usage boolean,
         add column if not exists truncated_output boolean,
@@ -83,6 +86,7 @@ export async function dbInsertEvent(ev: any, geo?: { country: string; region: st
   const duration_ms = m.durationMs ?? null;
   const wait_ms_total = m.waitMsTotal ?? null;
   const exit_code = m.exit ?? null;
+  const session_id = (ev.sessionId ?? m.sessionId) ?? null;
   const out_bytes_bucket = m.cumulativeBytesBucket ?? null;
   const scanner_usage = typeof m.scannerUsage === 'boolean' ? m.scannerUsage : null;
   const truncated_output = typeof m.truncatedOutput === 'boolean' ? m.truncatedOutput : null;
@@ -92,12 +96,13 @@ export async function dbInsertEvent(ev: any, geo?: { country: string; region: st
   const text = `
     insert into telemetry_events (
       t, anon, evt, os, ext, vscode, country, region,
-      duration_ms, wait_ms_total, exit_code, out_bytes_bucket, scanner_usage, truncated_output, error_phase, exception_hash,
+      duration_ms, wait_ms_total, exit_code, session_id, out_bytes_bucket, scanner_usage, truncated_output, error_phase, exception_hash,
       m
     ) values (
       $1,$2,$3,$4,$5,$6,$7,$8,
       $9,$10,$11,$12,$13,$14,$15,$16,
-      $17
+      $17,
+      $18
     )`;
 
   const values = [
@@ -109,15 +114,16 @@ export async function dbInsertEvent(ev: any, geo?: { country: string; region: st
     ev.vscode || null,
     geo?.country || null,
     geo?.region || null,
-    duration_ms,
-    wait_ms_total,
-    exit_code,
-    out_bytes_bucket,
+  duration_ms,
+  wait_ms_total,
+  exit_code,
+  session_id,
+  out_bytes_bucket,
     scanner_usage,
     truncated_output,
     error_phase,
     exception_hash,
-    Object.keys(m).length ? JSON.stringify(m) : null
+  Object.keys(m).length ? JSON.stringify(m) : null
   ];
   await pool.query(text, values);
 }
@@ -140,13 +146,21 @@ function continentOf(country?: string): string {
   return C[cc] || 'Unknown';
 }
 
-export async function dbReadStats(windowDays: number): Promise<any | null> {
+export async function dbReadStats(windowDays: number, fromS?: string, toS?: string): Promise<any | null> {
   if (!dbEnabled()) return null;
   if (!pool) pool = buildPool();
   const client = await pool.connect();
   try {
-    const to = new Date();
-    const from = new Date(to.getTime() - (windowDays-1) * 86400000);
+    let to = new Date();
+    let from = new Date(to.getTime() - (windowDays-1) * 86400000);
+    if (fromS && toS) {
+      // Parse YYYY-MM-DD inputs; inclusive range for days
+      const ft = new Date(fromS + 'T00:00:00Z');
+      const tt = new Date(toS + 'T23:59:59Z');
+      if (!isNaN(ft.getTime()) && !isNaN(tt.getTime()) && ft <= tt) {
+        from = ft; to = tt;
+      }
+    }
 
     // Totals and KPIs
     const qTotals = await client.query(`
@@ -239,6 +253,47 @@ export async function dbReadStats(windowDays: number): Promise<any | null> {
       client.query(`select count(*)::int c from telemetry_events where t >= $1 and t < $2 and evt='java.run.completed' and coalesce(scanner_usage, (m->>'scannerUsage')::boolean)=true`, [from,to]),
       client.query(`select count(*)::int c from telemetry_events where t >= $1 and t < $2 and evt='java.run.completed' and coalesce(truncated_output, (m->>'truncatedOutput')::boolean)=true`, [from,to])
     ]);
+
+    // Active sessions: sessions with activity in last 10 minutes and not yet completed
+    const qActive = await client.query(`
+      with recent as (
+        select session_id,
+               max(t) as tmax,
+               bool_or(evt='java.run.completed') as completed
+        from telemetry_events
+        where session_id is not null and t >= now() - interval '10 minutes'
+        group by session_id
+      )
+      select count(*)::int as c from recent where completed = false
+    `);
+
+    // Recent sessions summary (last N by last event time)
+    const qRecentSessions = await client.query(`
+      with s as (
+        select session_id,
+               min(t) as started_at,
+               max(t) as last_at,
+               max(case when evt='java.run.completed' then 1 else 0 end) as completed,
+               max(coalesce(exit_code, (m->>'exit')::int)) as exit_code,
+               max(coalesce(duration_ms, (m->>'durationMs')::bigint)) as duration_ms,
+               max(coalesce(scanner_usage, (m->>'scannerUsage')::boolean)) as interactive,
+               any_value(anon) as anon
+        from telemetry_events
+        where session_id is not null and t >= $1 and t < $2
+        group by session_id
+      )
+      select session_id, anon, started_at, last_at, completed::int as completed,
+             coalesce(exit_code, -1) as exit_code,
+             coalesce(duration_ms, 0) as duration_ms,
+             coalesce(interactive,false) as interactive
+      from s
+      order by last_at desc
+      limit 100
+    `, [from,to]);
+
+    // Installs total (lifetime) and window installs
+    const qInstallsTotal = await client.query(`select count(*)::int as c from telemetry_events where evt='install.created'`);
+    const qInstallsWindow = await client.query(`select count(*)::int as c from telemetry_events where evt='install.created' and t >= $1 and t < $2`, [from,to]);
 
     // Daily learning outcomes by exit code (teacher-focused)
     const qDLO = await client.query(`
@@ -381,7 +436,7 @@ export async function dbReadStats(windowDays: number): Promise<any | null> {
       outputBucket: r.ob || undefined
     }));
 
-    const res = {
+  const res = {
       from: dailyDates[0] || new Date(from).toISOString().slice(0,10),
       to: dailyDates[dailyDates.length-1] || new Date(to).toISOString().slice(0,10),
       windowDays,
@@ -408,6 +463,19 @@ export async function dbReadStats(windowDays: number): Promise<any | null> {
       truncationRate: completed? Number(qTrunc.rows[0]?.c||0)/completed : 0,
       topExceptions: objFrom(qTopEx.rows),
       geo: { byContinent, byCountry },
+      activeSessions: Number(qActive.rows[0]?.c || 0),
+      installsTotal: Number(qInstallsTotal.rows[0]?.c || 0),
+      installsWindow: Number(qInstallsWindow.rows[0]?.c || 0),
+      sessionsRecent: (qRecentSessions.rows as any[]).map(r=>({
+        id: r.session_id as string,
+        student: (r.anon as string)||'',
+        startedAt: (r.started_at as Date)?.toISOString?.() || String(r.started_at),
+        lastAt: (r.last_at as Date)?.toISOString?.() || String(r.last_at),
+        completed: !!r.completed,
+        exit: Number(r.exit_code||-1),
+        durationMs: Number(r.duration_ms||0),
+        interactive: !!r.interactive
+      })),
   dailyLearningOutcomes,
   sessions: { successTop, frustratedTop },
       tables: {

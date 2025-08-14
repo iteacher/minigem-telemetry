@@ -86,7 +86,10 @@ async function main() {
     try {
   // Public stats endpoint: no auth required.
       if (dbEnabled()) {
-        const data = await dbReadStats(CONFIG.STATS_WINDOW_DAYS);
+        const q: any = (req as any).query || {};
+        const from = typeof q.from === 'string' ? q.from : undefined;
+        const to = typeof q.to === 'string' ? q.to : undefined;
+        const data = await dbReadStats(CONFIG.STATS_WINDOW_DAYS, from, to);
         if (data) return data; // minimal DB stats
       }
       return readWindowStats();
