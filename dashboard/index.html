@@ -99,7 +99,8 @@
           <div class="panel-title">Daily Student Learning Outcomes</div>
           <div class="panel-sub">How students are progressing over time</div>
         </div>
-        <canvas id="learningOutcomesChart" height="170"></canvas>
+  <canvas id="learningOutcomesChart" height="170"></canvas>
+  <p class="outcome-explanation">Daily counts of session outcomes derived from database-stored exit codes.</p>
       </div>
 
       <h2 class="section-title">Session Exit Analysis</h2>
@@ -114,7 +115,10 @@
           <div class="legend-item crashed"><div class="legend-color"></div><div><strong>Runtime Error (1)</strong> - Unhandled exception in student code</div></div>
           <div class="legend-item killed"><div class="legend-color"></div><div><strong>Terminated (143)</strong> - Killed by system/IDE</div></div>
         </div>
-        <canvas id="exitCodesChart" height="140"></canvas>
+        <div style="max-width:520px;margin:auto">
+          <canvas id="exitCodesChart" height="120"></canvas>
+        </div>
+        <p class="outcome-explanation">This chart shows how student sessions ended based on exit codes. Aim for a higher share of Normal Exit (0).</p>
       </div>
 
       <h2 class="section-title">Ranked Sessions</h2>
@@ -134,17 +138,20 @@
         <div class="card panel">
           <div class="panel-head"><div class="panel-title">Student Java Runtime Errors</div><div class="panel-sub">Common programming mistakes students make</div></div>
           <canvas id="studentErrorsChart" height="150"></canvas>
+          <p class="outcome-explanation">Compile vs runtime errors help identify where students struggle: setup vs logic.</p>
         </div>
         <div class="card panel">
           <div class="panel-head"><div class="panel-title">Top Student Runtime Exceptions</div><div class="panel-sub">Most frequent errors in student code</div></div>
           <canvas id="topStudentExChart" height="140"></canvas>
+          <p class="outcome-explanation">Focus lessons on the most common exceptions first.</p>
         </div>
       </div>
 
       <h2 class="section-title">Learning Environment</h2>
       <div class="card panel">
         <div class="panel-head"><div class="panel-title">Operating Systems</div><div class="panel-sub">What platforms students are using</div></div>
-        <canvas id="osSeriesChart" height="170"></canvas>
+  <canvas id="osSeriesChart" height="170"></canvas>
+  <p class="outcome-explanation">OS trends can explain environment-specific issues.</p>
       </div>
 
       <h2 class="section-title">Usage Patterns</h2>
@@ -152,10 +159,12 @@
         <div class="card panel">
           <div class="panel-head"><div class="panel-title">Programming Activity by Hour</div><div class="panel-sub">When students are most active (UTC)</div></div>
           <canvas id="hourlyHvChart" height="170"></canvas>
+          <p class="outcome-explanation">Peak hours can guide when to offer support.</p>
         </div>
         <div class="card panel">
           <div class="panel-head"><div class="panel-title">Day of Week Activity</div><div class="panel-sub">Student programming patterns</div></div>
           <canvas id="dowChart" height="140"></canvas>
+          <p class="outcome-explanation">Weekly patterns reflect assignment schedules and labs.</p>
         </div>
       </div>
 
@@ -164,18 +173,22 @@
         <div class="card panel">
           <div class="panel-head"><div class="panel-title">Session Duration Distribution</div><div class="panel-sub">How long students spend programming</div></div>
           <canvas id="durHistChart" height="140"></canvas>
+          <p class="outcome-explanation">Longer sessions often indicate deeper practice; very short ones may reflect setup or errors.</p>
         </div>
         <div class="card panel">
           <div class="panel-head"><div class="panel-title">Output Size Distribution</div><div class="panel-sub">Amount of console output generated</div></div>
           <canvas id="outBucketChart" height="140"></canvas>
+          <p class="outcome-explanation">Very large outputs can signal infinite loops or excessive logging.</p>
         </div>
         <div class="card panel">
           <div class="panel-head"><div class="panel-title">VS Code Versions</div><div class="panel-sub">Development environment versions</div></div>
           <canvas id="vscodeChart" height="150"></canvas>
+          <p class="outcome-explanation">Older versions may lack features or have bugs impacting students.</p>
         </div>
         <div class="card panel">
           <div class="panel-head"><div class="panel-title">Extension Versions</div><div class="panel-sub">Java Web Console extension versions</div></div>
           <canvas id="extChart" height="150"></canvas>
+          <p class="outcome-explanation">Ensure students are on the latest extension for the best experience.</p>
         </div>
       </div>
 
@@ -202,7 +215,7 @@
       const mkBar = (labels, data, label='Count', title='') => { const cols=colorSet(data.length); const cfg={ type:'bar', data:{ labels, datasets:[{ label, data, backgroundColor:cols.fill, borderColor:cols.stroke, borderWidth:1, borderRadius:6 }] }, options: { ...common, scales: baseScales(label) } }; return title?withTitle(cfg,title):cfg; };
       const mkLine = (labels, data, label, color='#60a5fa', title='') => { const cfg={ type:'line', data:{ labels, datasets:[{ label, data, borderColor: color, backgroundColor: hexToRgba(color,.2), fill:true, tension:.28, pointRadius:2, pointHoverRadius:4 }] }, options: { ...common, scales: baseScales(label) } }; return title?withTitle(cfg,title):cfg; };
       const mkLineMulti = (labels, series, title='') => { const cfg={ type:'line', data:{ labels, datasets: series.map((s,i)=>({ label:s.key, data:s.data, borderColor:BASE_COLORS[i%BASE_COLORS.length], backgroundColor: hexToRgba(BASE_COLORS[i%BASE_COLORS.length], .18), fill:true, tension:.25, pointRadius:1.5 })) }, options: { ...common, scales: baseScales('Hits') } }; return title?withTitle(cfg,title):cfg; };
-      const mkDoughnut = (data) => ({ type:'doughnut', data, options:{ responsive:true, plugins:{ legend:{ labels:{ color:axisColor } }, tooltip:{ backgroundColor:'#0f172a', titleColor:'#e2e8f0', bodyColor:'#cbd5e1', borderColor:'#334155', borderWidth:1 } } } });
+  const mkDoughnut = (data) => ({ type:'doughnut', data, options:{ responsive:true, maintainAspectRatio:false, cutout:'58%', layout:{ padding:8 }, plugins:{ legend:{ labels:{ color:axisColor } }, tooltip:{ backgroundColor:'#0f172a', titleColor:'#e2e8f0', bodyColor:'#cbd5e1', borderColor:'#334155', borderWidth:1 } } } });
 
       let charts = {};
       function upsert(id, cfg) { if (!charts[id]) charts[id] = new Chart($(id), cfg); else { charts[id].data = cfg.data; charts[id].options = { ...charts[id].options, ...cfg.options }; charts[id].update(); } }
@@ -248,12 +261,13 @@
         $('#windowDays').textContent = s.windowDays || 7;
         $('#meta').textContent = `Window: ${s.from} → ${s.to} • Updated ${new Date().toLocaleTimeString()}`;
 
-        const totalSessions = s.total || 1;
-        const exitCodes = s.exitCodes || {};
-        const successRate = Math.round(((exitCodes['0'] || 0) / totalSessions) * 100);
-        const frustratedRate = Math.round(((exitCodes['130'] || 0) / totalSessions) * 100);
-        const crashedRate = Math.round(((exitCodes['1'] || 0) / totalSessions) * 100);
-        const killedRate = Math.round(((exitCodes['143'] || 0) / totalSessions) * 100);
+  const exitCodes = s.exitCodes || {};
+  const completedRuns = Number(s.runs?.completed || 0);
+  const denom = completedRuns > 0 ? completedRuns : Object.values(exitCodes).reduce((a,b)=>a+Number(b||0),0) || 1;
+  const successRate = Math.round(((exitCodes['0'] || 0) / denom) * 100);
+  const frustratedRate = Math.round(((exitCodes['130'] || 0) / denom) * 100);
+  const crashedRate = Math.round(((exitCodes['1'] || 0) / denom) * 100);
+  const killedRate = Math.round(((exitCodes['143'] || 0) / denom) * 100);
 
         $('#kpi-success-rate').textContent = successRate + '%';
         $('#kpi-frustrated-rate').textContent = frustratedRate + '%';

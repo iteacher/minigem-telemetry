@@ -240,6 +240,43 @@ export async function dbReadStats(windowDays: number): Promise<any | null> {
       client.query(`select count(*)::int c from telemetry_events where t >= $1 and t < $2 and evt='java.run.completed' and coalesce(truncated_output, (m->>'truncatedOutput')::boolean)=true`, [from,to])
     ]);
 
+    // Daily learning outcomes by exit code (teacher-focused)
+    const qDLO = await client.query(`
+      select to_char(date(t),'YYYY-MM-DD') as day,
+             coalesce(exit_code, (m->>'exit')::int, 0) as exit,
+             count(*)::int as c
+      from telemetry_events
+      where t >= $1 and t < $2 and evt='java.run.completed'
+      group by 1,2
+      order by 1,2
+    `, [from,to]);
+
+    // Ranked sessions: successful (exit=0) and frustrated (Ctrl+C=130)
+    const [qSuccessTop, qFrustratedTop] = await Promise.all([
+      client.query(`
+        select anon, t,
+               coalesce(duration_ms,(m->>'durationMs')::bigint) as dur,
+               coalesce(scanner_usage,(m->>'scannerUsage')::boolean) as inter,
+               coalesce(exit_code,(m->>'exit')::int) as exit,
+               coalesce(out_bytes_bucket, m->>'cumulativeBytesBucket') as ob
+        from telemetry_events
+        where t >= $1 and t < $2 and evt='java.run.completed' and coalesce(exit_code,(m->>'exit')::int)=0
+        order by inter desc nulls last, dur desc nulls last
+        limit 20
+      `, [from,to]),
+      client.query(`
+        select anon, t,
+               coalesce(duration_ms,(m->>'durationMs')::bigint) as dur,
+               coalesce(scanner_usage,(m->>'scannerUsage')::boolean) as inter,
+               coalesce(exit_code,(m->>'exit')::int) as exit,
+               coalesce(out_bytes_bucket, m->>'cumulativeBytesBucket') as ob
+        from telemetry_events
+        where t >= $1 and t < $2 and evt='java.run.completed' and coalesce(exit_code,(m->>'exit')::int)=130
+        order by inter asc nulls last, dur asc nulls last
+        limit 20
+      `, [from,to])
+    ]);
+
     // Top exceptions
     const qTopEx = await client.query(`
       select coalesce(exception_hash, m->>'exceptionHash','') as k, count(*)::int v
@@ -316,6 +353,34 @@ export async function dbReadStats(windowDays: number): Promise<any | null> {
     const total = Number(totals.total||0);
     const uniques = Number(totals.uniques||0);
 
+    // Assemble teacher-focused daily learning outcomes
+    const dailyLearningOutcomes: Record<string, Record<string, number>> = {};
+    for (const r of qDLO.rows as any[]) {
+      const day = r.day as string;
+      const code = String((r.exit ?? 0) as number);
+      const c = Number(r.c || 0);
+      if (!dailyLearningOutcomes[day]) dailyLearningOutcomes[day] = {};
+      dailyLearningOutcomes[day][code] = (dailyLearningOutcomes[day][code] || 0) + c;
+    }
+
+    const mask = (anon?: string) => (!anon || anon.length < 6) ? 'Student #—' : `Student #${anon.slice(-6)}`;
+    const successTop = (qSuccessTop.rows as any[]).map(r => ({
+      student: mask(r.anon as string),
+      ts: new Date(r.t as string | Date).toISOString(),
+      durationMs: Number(r.dur || 0),
+      interactive: r.inter === true,
+      exit: Number(r.exit || 0),
+      outputBucket: r.ob || undefined
+    }));
+    const frustratedTop = (qFrustratedTop.rows as any[]).map(r => ({
+      student: mask(r.anon as string),
+      ts: new Date(r.t as string | Date).toISOString(),
+      durationMs: Number(r.dur || 0),
+      interactive: r.inter === true,
+      exit: Number(r.exit || 130),
+      outputBucket: r.ob || undefined
+    }));
+
     const res = {
       from: dailyDates[0] || new Date(from).toISOString().slice(0,10),
       to: dailyDates[dailyDates.length-1] || new Date(to).toISOString().slice(0,10),
@@ -343,6 +408,8 @@ export async function dbReadStats(windowDays: number): Promise<any | null> {
       truncationRate: completed? Number(qTrunc.rows[0]?.c||0)/completed : 0,
       topExceptions: objFrom(qTopEx.rows),
       geo: { byContinent, byCountry },
+  dailyLearningOutcomes,
+  sessions: { successTop, frustratedTop },
       tables: {
         eventsTop: byEvent.rows.map((r:any)=>{ const v=Number(r.v); const p= total? v/total:0; return { key: r.k, event: r.k, count: v, pct: p, percent: Math.round(p*1000)/10 }; }).slice(0,20),
         extTop: byExt.rows.map((r:any)=>{ const v=Number(r.v); const p= total? v/total:0; return { key: r.k, version: r.k, count: v, pct: p, percent: Math.round(p*1000)/10 }; }).slice(0,20),
