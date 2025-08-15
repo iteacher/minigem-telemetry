@@ -200,17 +200,21 @@ export async function dbReadStats(windowDays: number, fromS?: string, toS?: stri
   try {
     // Show ALL data - no date restrictions unless specifically requested
     let to = new Date();
-    let from = new Date('1970-01-01T00:00:00Z');  // Start from Unix epoch to include all data
+    let from = new Date(to.getTime() - 30 * 86400000);  // Last 30 days for display, but query all data
+    let queryFrom = new Date('1970-01-01T00:00:00Z');  // Query all data from epoch
+    let queryTo = to;
+    
     if (fromS && toS) {
       // Parse YYYY-MM-DD inputs; inclusive range for days
       const ft = new Date(fromS + 'T00:00:00Z');
       const tt = new Date(toS + 'T23:59:59Z');
       if (!isNaN(ft.getTime()) && !isNaN(tt.getTime()) && ft <= tt) {
         from = ft; to = tt;
+        queryFrom = ft; queryTo = tt;
       }
     }
 
-    if (CONFIG.DEBUG_DB) log.debug('[db] stats date range', { from: from.toISOString(), to: to.toISOString(), windowDays });
+    if (CONFIG.DEBUG_DB) log.debug('[db] stats date range', { from: from.toISOString(), to: to.toISOString(), queryFrom: queryFrom.toISOString(), queryTo: queryTo.toISOString(), windowDays });
 
     // Totals and KPIs
   const qTotalsSql = `
@@ -220,9 +224,9 @@ export async function dbReadStats(windowDays: number, fromS?: string, toS?: stri
       from telemetry_events
       where t >= $1 and t < $2
   `;
-  trace.push({ sql: qTotalsSql, params: [from,to] });
-  if (CONFIG.DEBUG_DB) log.debug('[db] stats.qTotals', { sql: qTotalsSql, params: [from,to] });
-  const qTotals = await client.query(qTotalsSql, [from, to]);
+  trace.push({ sql: qTotalsSql, params: [queryFrom, queryTo] });
+  if (CONFIG.DEBUG_DB) log.debug('[db] stats.qTotals', { sql: qTotalsSql, params: [queryFrom, queryTo] });
+  const qTotals = await client.query(qTotalsSql, [queryFrom, queryTo]);
     const totals = qTotals.rows[0] || { total:0, uniques:0 };
 
     // Grouped counts
@@ -546,8 +550,8 @@ export async function dbReadStats(windowDays: number, fromS?: string, toS?: stri
     }));
 
   const res: any = {
-      from: dailyDates[0] || "All data",
-      to: dailyDates[dailyDates.length-1] || "All data",
+      from: from.toISOString().slice(0,10),
+      to: to.toISOString().slice(0,10),
       windowDays,
       total,
       uniques,
