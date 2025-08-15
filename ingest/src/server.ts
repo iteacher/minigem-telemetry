@@ -64,7 +64,9 @@ async function main() {
   await dbInit();
   log.info('boot.dbInit.done', { enabled: dbEnabled() });
 
+  log.info('boot.register.rateLimit.start');
   await app.register(rateLimit, { max: CONFIG.RATE_LIMIT_MAX, timeWindow: CONFIG.RATE_LIMIT_TIME_WINDOW });
+  log.info('boot.register.rateLimit.done');
 
   app.get('/health', async () => ({ ok: true, ts: Date.now() }));
 
@@ -194,8 +196,14 @@ async function main() {
     }
   });
 
-  await app.listen({ port: CONFIG.PORT, host: '0.0.0.0' });
-  log.info('boot.listen', { url: `http://0.0.0.0:${CONFIG.PORT}` });
+  try {
+    log.info('boot.listen.start', { port: CONFIG.PORT, host: '0.0.0.0' });
+    await app.listen({ port: CONFIG.PORT, host: '0.0.0.0' });
+    log.info('boot.listen.ok', { url: `http://0.0.0.0:${CONFIG.PORT}` });
+  } catch (e: any) {
+    log.error('boot.listen.error', { error: String(e?.message || e) });
+    throw e;
+  }
 }
 
-main().catch(err => { console.error('fatal:', err); process.exit(1); });
+main().catch(err => { log.error('fatal', String(err)); process.exit(1); });
