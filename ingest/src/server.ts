@@ -70,6 +70,33 @@ async function main() {
 
   app.get('/dbhealth', async () => { try { return await dbHealth(); } catch (e) { return { enabled: dbEnabled(), error: String(e) }; } });
 
+  // Debug: write to log file and return path
+  app.get('/debug/logping', async () => {
+    log.info('debug.logping', { when: new Date().toISOString() });
+    return { ok: true, file: (log as any).file, level: (log as any).level };
+  });
+
+  // Debug: show non-sensitive env for process
+  app.get('/debug/env', async () => {
+    return {
+      node: process.version,
+      port: CONFIG.PORT,
+      env: {
+        PORT: process.env.PORT || null,
+        DATABASE_URL: !!process.env.DATABASE_URL,
+        PGHOST: process.env.PGHOST || null,
+        PGUSER: process.env.PGUSER || null,
+        PGDATABASE: process.env.PGDATABASE || null,
+        PGPORT: process.env.PGPORT || null,
+        PGSSL: process.env.PGSSL || null,
+        LOG_FILE: process.env.LOG_FILE || null,
+        LOG_LEVEL: process.env.LOG_LEVEL || null,
+        DEBUG_DB: process.env.DEBUG_DB || null,
+        DEBUG_STATS_TRACE: process.env.DEBUG_STATS_TRACE || null
+      }
+    };
+  });
+
   app.get('/debug/recent', async (req, reply) => {
     if (CONFIG.STATS_SECRET) {
       const key = (req.headers['x-stats-key'] as string) || (req.query as any)?.key;
