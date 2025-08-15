@@ -198,8 +198,9 @@ export async function dbReadStats(windowDays: number, fromS?: string, toS?: stri
   const trace: any[] = [];
   const client = await pool.connect();
   try {
+    // Show ALL data - no date restrictions unless specifically requested
     let to = new Date();
-    let from = new Date(to.getTime() - windowDays * 86400000);  // Fix: use windowDays, not windowDays-1
+    let from = new Date('1970-01-01T00:00:00Z');  // Start from Unix epoch to include all data
     if (fromS && toS) {
       // Parse YYYY-MM-DD inputs; inclusive range for days
       const ft = new Date(fromS + 'T00:00:00Z');
