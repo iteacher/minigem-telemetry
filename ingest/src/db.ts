@@ -546,8 +546,8 @@ export async function dbReadStats(windowDays: number, fromS?: string, toS?: stri
     }));
 
   const res: any = {
-      from: dailyDates[0] || new Date(from).toISOString().slice(0,10),
-      to: dailyDates[dailyDates.length-1] || new Date(to).toISOString().slice(0,10),
+      from: dailyDates[0] || "All data",
+      to: dailyDates[dailyDates.length-1] || "All data",
       windowDays,
       total,
       uniques,
