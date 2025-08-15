@@ -1,5 +1,6 @@
 import { Pool } from 'pg';
 import { CONFIG } from './config.js';
+import { log } from './logger.js';
 
 let pool: Pool | null = null;
 
@@ -14,14 +15,14 @@ function getUrl(): string | undefined {
 function buildPool(): Pool {
   const url = getUrl();
   if (url) {
-    if (CONFIG.DEBUG_DB) console.log('[db] using url');
+  if (CONFIG.DEBUG_DB) log.debug('[db] using url');
     const u = new URL(url);
     const sslmode = u.searchParams.get('sslmode');
     const ssl = sslmode && sslmode !== 'disable' ? { rejectUnauthorized: false } : undefined;
     return new Pool({ connectionString: url, ssl });
   }
   // Build from discrete env/config (supports TCP or Unix socket via host path)
-  if (CONFIG.DEBUG_DB) console.log('[db] using discrete env vars');
+  if (CONFIG.DEBUG_DB) log.debug('[db] using discrete env vars');
   const host = process.env.PGHOST || (CONFIG as any)?.PGHOST;
   const portRaw = process.env.PGPORT || (CONFIG as any)?.PGPORT;
   const port = portRaw ? parseInt(String(portRaw), 10) : 5432;
@@ -33,7 +34,7 @@ function buildPool(): Pool {
   if (!host || !user || !database) {
     throw new Error('DB not configured: set DATABASE_URL/PG_URL or PGHOST, PGUSER, PGDATABASE');
   }
-  if (CONFIG.DEBUG_DB) console.log('[db] pool conf', { host, port, user, database, ssl: !!ssl });
+  if (CONFIG.DEBUG_DB) log.info('[db] pool conf', { host, port, user, database, ssl: !!ssl });
   return new Pool({ host, port, user, password, database, ssl } as any);
 }
 
@@ -48,12 +49,12 @@ export function dbEnabled(): boolean {
 export async function dbInit(): Promise<void> {
   if (!dbEnabled()) return;
   if (!pool) pool = buildPool();
-  if (CONFIG.DEBUG_DB) console.log('[db] init: connecting and ensuring schema');
+  if (CONFIG.DEBUG_DB) log.info('[db] init: connecting and ensuring schema');
   const client = await pool.connect();
   try {
-    if (CONFIG.DEBUG_DB) console.log('[db] ping');
+    if (CONFIG.DEBUG_DB) log.debug('[db] ping');
     await client.query('select 1');
-    if (CONFIG.DEBUG_DB) console.log('[db] creating table/indexes if not exist');
+    if (CONFIG.DEBUG_DB) log.debug('[db] creating table/indexes if not exist');
     await client.query(`
       create table if not exists telemetry_events (
         id bigserial primary key,
@@ -88,7 +89,7 @@ export async function dbInit(): Promise<void> {
     `);
 
     // Ensure columns exist if table predated this migration
-    if (CONFIG.DEBUG_DB) console.log('[db] migrating columns if needed');
+  if (CONFIG.DEBUG_DB) log.debug('[db] migrating columns if needed');
     await client.query(`
       alter table telemetry_events
         add column if not exists duration_ms bigint,
@@ -109,7 +110,7 @@ export async function dbInit(): Promise<void> {
 export async function dbInsertEvent(ev: any, geo?: { country: string; region: string }): Promise<void> {
   if (!dbEnabled()) return;
   if (!pool) pool = buildPool();
-  if (CONFIG.DEBUG_DB) console.log('[db] insert: raw event', JSON.stringify(ev));
+  if (CONFIG.DEBUG_DB) log.debug('[db] insert: raw event', ev);
   const tnum = typeof ev.t === 'number' ? ev.t : Date.parse(ev.t);
   const ms = tnum < 1e12 ? tnum * 1000 : tnum;
   const ts = new Date(ms);
@@ -157,9 +158,15 @@ export async function dbInsertEvent(ev: any, geo?: { country: string; region: st
     exception_hash,
   Object.keys(m).length ? JSON.stringify(m) : null
   ];
-  if (CONFIG.DEBUG_DB) console.log('[db] insert sql', text.replace(/\s+/g,' '));
-  if (CONFIG.DEBUG_DB) console.log('[db] insert values', values);
-  await pool.query(text, values);
+  if (CONFIG.DEBUG_DB) log.debug('[db] insert sql', text.replace(/\s+/g,' '));
+  if (CONFIG.DEBUG_DB) log.debug('[db] insert values', values);
+  try {
+    await pool.query(text, values);
+    if (CONFIG.DEBUG_DB) log.info('[db] insert ok');
+  } catch (e: any) {
+    log.error('[db] insert error', { error: String(e?.message || e) });
+    throw e;
+  }
 }
 
 function arr24(rows: { h: number; c: number }[]): number[] { const a = new Array(24).fill(0); for (const r of rows) a[r.h|0] = Number(r.c)||0; return a; }
@@ -206,6 +213,7 @@ export async function dbReadStats(windowDays: number, fromS?: string, toS?: stri
       where t >= $1 and t < $2
   `;
   trace.push({ sql: qTotalsSql, params: [from,to] });
+  if (CONFIG.DEBUG_DB) log.debug('[db] stats.qTotals', { sql: qTotalsSql, params: [from,to] });
   const qTotals = await client.query(qTotalsSql, [from, to]);
     const totals = qTotals.rows[0] || { total:0, uniques:0 };
 
@@ -215,7 +223,7 @@ export async function dbReadStats(windowDays: number, fromS?: string, toS?: stri
     const sqlByExt = `select coalesce(ext,'Unknown') as k, count(*)::int as v from telemetry_events where t >= $1 and t < $2 group by 1 order by 2 desc`;
     const sqlByVscode = `select coalesce(vscode,'Unknown') as k, count(*)::int as v from telemetry_events where t >= $1 and t < $2 group by 1 order by 2 desc`;
     trace.push({ sql: sqlByEvent, params: [from,to] }, { sql: sqlByOs, params: [from,to] }, { sql: sqlByExt, params: [from,to] }, { sql: sqlByVscode, params: [from,to] });
-    const [byEvent, byOs, byExt, byVscode] = await Promise.all([
+  const [byEvent, byOs, byExt, byVscode] = await Promise.all([
       client.query(sqlByEvent, [from,to]),
       client.query(sqlByOs, [from,to]),
       client.query(sqlByExt, [from,to]),
@@ -240,13 +248,14 @@ export async function dbReadStats(windowDays: number, fromS?: string, toS?: stri
       order by d.d
   `;
   trace.push({ sql: qDailyHitsSql, params: [from,to] });
+  if (CONFIG.DEBUG_DB) log.debug('[db] stats.qDailyHits', { sql: qDailyHitsSql, params: [from,to] });
   const qDailyHits = await client.query(qDailyHitsSql, [from,to]);
 
     // Hourly hits and visitors
     const sqlHourlyHits = `select extract(hour from t at time zone 'utc')::int h, count(*)::int c from telemetry_events where t >= $1 and t < $2 group by 1`;
     const sqlHourlyVisitors = `select extract(hour from t at time zone 'utc')::int h, count(distinct anon)::int c from telemetry_events where t >= $1 and t < $2 group by 1`;
     trace.push({ sql: sqlHourlyHits, params: [from,to] }, { sql: sqlHourlyVisitors, params: [from,to] });
-    const [qHourlyHits, qHourlyVisitors] = await Promise.all([
+  const [qHourlyHits, qHourlyVisitors] = await Promise.all([
       client.query(sqlHourlyHits, [from,to]),
       client.query(sqlHourlyVisitors, [from,to])
     ]);
@@ -254,6 +263,7 @@ export async function dbReadStats(windowDays: number, fromS?: string, toS?: stri
     // Day of week
   const sqlDow = `select extract(dow from t at time zone 'utc')::int d, count(*)::int c from telemetry_events where t >= $1 and t < $2 group by 1`;
   trace.push({ sql: sqlDow, params: [from,to] });
+  if (CONFIG.DEBUG_DB) log.debug('[db] stats.qDow', { sql: sqlDow, params: [from,to] });
   const qDow = await client.query(sqlDow, [from,to]);
 
     // Runs and errors
@@ -262,7 +272,7 @@ export async function dbReadStats(windowDays: number, fromS?: string, toS?: stri
     const sqlCompileErr = `select count(*)::int c from telemetry_events where t >= $1 and t < $2 and evt='java.run.error' and coalesce(error_phase, m->>'phase')='compile'`;
     const sqlRuntimeErr = `select count(*)::int c from telemetry_events where t >= $1 and t < $2 and evt='java.run.error' and coalesce(error_phase, m->>'phase')<>'compile'`;
     trace.push({ sql: sqlStarted, params: [from,to] }, { sql: sqlCompleted, params: [from,to] }, { sql: sqlCompileErr, params: [from,to] }, { sql: sqlRuntimeErr, params: [from,to] });
-    const [qStarted, qCompleted, qCompileErr, qRuntimeErr] = await Promise.all([
+  const [qStarted, qCompleted, qCompileErr, qRuntimeErr] = await Promise.all([
       client.query(sqlStarted, [from,to]),
       client.query(sqlCompleted, [from,to]),
       client.query(sqlCompileErr, [from,to]),
@@ -284,6 +294,7 @@ export async function dbReadStats(windowDays: number, fromS?: string, toS?: stri
       from d
   `;
   trace.push({ sql: qDurSql, params: [from,to] });
+  if (CONFIG.DEBUG_DB) log.debug('[db] stats.qDur', { sql: qDurSql, params: [from,to] });
   const qDur = await client.query(qDurSql, [from,to]);
 
   const qDurHistSql = `
@@ -302,6 +313,7 @@ export async function dbReadStats(windowDays: number, fromS?: string, toS?: stri
       ) x
   `;
   trace.push({ sql: qDurHistSql, params: [from,to] });
+  if (CONFIG.DEBUG_DB) log.debug('[db] stats.qDurHist', { sql: qDurHistSql, params: [from,to] });
   const qDurHist = await client.query(qDurHistSql, [from,to]);
 
     // Exit codes, output buckets, interactive/truncation
@@ -310,7 +322,7 @@ export async function dbReadStats(windowDays: number, fromS?: string, toS?: stri
     const sqlInteractive = `select count(*)::int c from telemetry_events where t >= $1 and t < $2 and evt='java.run.completed' and coalesce(scanner_usage, (m->>'scannerUsage')::boolean)=true`;
     const sqlTrunc = `select count(*)::int c from telemetry_events where t >= $1 and t < $2 and evt='java.run.completed' and coalesce(truncated_output, (m->>'truncatedOutput')::boolean)=true`;
     trace.push({ sql: sqlExit, params: [from,to] }, { sql: sqlOut, params: [from,to] }, { sql: sqlInteractive, params: [from,to] }, { sql: sqlTrunc, params: [from,to] });
-    const [qExit, qOut, qInteractive, qTrunc] = await Promise.all([
+  const [qExit, qOut, qInteractive, qTrunc] = await Promise.all([
       client.query(sqlExit, [from,to]),
       client.query(sqlOut, [from,to]),
       client.query(sqlInteractive, [from,to]),
@@ -330,6 +342,7 @@ export async function dbReadStats(windowDays: number, fromS?: string, toS?: stri
       select count(*)::int as c from recent where completed = false
   `;
   trace.push({ sql: qActiveSql, params: [] });
+  if (CONFIG.DEBUG_DB) log.debug('[db] stats.qActive', { sql: qActiveSql });
   const qActive = await client.query(qActiveSql);
 
     // Recent sessions summary (last N by last event time)
@@ -356,13 +369,16 @@ export async function dbReadStats(windowDays: number, fromS?: string, toS?: stri
       limit 100
   `;
   trace.push({ sql: qRecentSessionsSql, params: [from,to] });
+  if (CONFIG.DEBUG_DB) log.debug('[db] stats.qRecentSessions', { sql: qRecentSessionsSql, params: [from,to] });
   const qRecentSessions = await client.query(qRecentSessionsSql, [from,to]);
 
     // Installs total (lifetime) and window installs
   const sqlInstallsTotal = `select count(*)::int as c from telemetry_events where evt='install.created'`;
   const sqlInstallsWindow = `select count(*)::int as c from telemetry_events where evt='install.created' and t >= $1 and t < $2`;
   trace.push({ sql: sqlInstallsTotal, params: [] }, { sql: sqlInstallsWindow, params: [from,to] });
+  if (CONFIG.DEBUG_DB) log.debug('[db] stats.qInstallsTotal', { sql: sqlInstallsTotal });
   const qInstallsTotal = await client.query(sqlInstallsTotal);
+  if (CONFIG.DEBUG_DB) log.debug('[db] stats.qInstallsWindow', { sql: sqlInstallsWindow, params: [from,to] });
   const qInstallsWindow = await client.query(sqlInstallsWindow, [from,to]);
 
     // Daily learning outcomes by exit code (teacher-focused)
@@ -376,6 +392,7 @@ export async function dbReadStats(windowDays: number, fromS?: string, toS?: stri
       order by 1,2
   `;
   trace.push({ sql: qDloSql, params: [from,to] });
+  if (CONFIG.DEBUG_DB) log.debug('[db] stats.qDLO', { sql: qDloSql, params: [from,to] });
   const qDLO = await client.query(qDloSql, [from,to]);
 
     // Ranked sessions: successful (exit=0) and frustrated (Ctrl+C=130)
@@ -402,7 +419,7 @@ export async function dbReadStats(windowDays: number, fromS?: string, toS?: stri
         limit 20
       `;
     trace.push({ sql: sqlSuccessTop, params: [from,to] }, { sql: sqlFrustratedTop, params: [from,to] });
-    const [qSuccessTop, qFrustratedTop] = await Promise.all([
+  const [qSuccessTop, qFrustratedTop] = await Promise.all([
       client.query(sqlSuccessTop, [from,to]),
       client.query(sqlFrustratedTop, [from,to])
     ]);
@@ -414,6 +431,7 @@ export async function dbReadStats(windowDays: number, fromS?: string, toS?: stri
       group by 1 order by 2 desc limit 50
   `;
   trace.push({ sql: sqlTopEx, params: [from,to] });
+  if (CONFIG.DEBUG_DB) log.debug('[db] stats.qTopEx', { sql: sqlTopEx, params: [from,to] });
   const qTopEx = await client.query(sqlTopEx, [from,to]);
 
     // OS daily series
@@ -430,6 +448,7 @@ export async function dbReadStats(windowDays: number, fromS?: string, toS?: stri
       order by d.d
   `;
   trace.push({ sql: sqlOsDaily, params: [from,to] });
+  if (CONFIG.DEBUG_DB) log.debug('[db] stats.qOsDaily', { sql: sqlOsDaily, params: [from,to] });
   const qOsDaily = await client.query(sqlOsDaily, [from,to]);
 
     // Geo by country
@@ -438,6 +457,7 @@ export async function dbReadStats(windowDays: number, fromS?: string, toS?: stri
       from telemetry_events where t >= $1 and t < $2 group by 1 order by 2 desc
   `;
   trace.push({ sql: sqlCountry, params: [from,to] });
+  if (CONFIG.DEBUG_DB) log.debug('[db] stats.qCountry', { sql: sqlCountry, params: [from,to] });
   const qCountry = await client.query(sqlCountry, [from,to]);
 
     // Assemble results
@@ -573,7 +593,8 @@ export async function dbReadStats(windowDays: number, fromS?: string, toS?: stri
       console.log('[stats] trace', JSON.stringify(trace));
     }
 
-    return res;
+  if (CONFIG.DEBUG_DB) log.info('[db] stats.ok', { total, uniques, from: res.from, to: res.to });
+  return res;
   } finally {
     client.release();
   }
@@ -589,7 +610,7 @@ export async function dbRecent(limit = 50): Promise<any[]> {
     order by id desc
     limit $1
   `;
-  if (CONFIG.DEBUG_DB) console.log('[db] recent sql', sql, 'limit', limit);
+  if (CONFIG.DEBUG_DB) log.debug('[db] recent sql', { sql, limit });
   const { rows } = await pool.query(sql, [Math.max(1, Math.min(500, limit))]);
   return rows;
 }
@@ -601,20 +622,22 @@ export async function dbCounts(hours = 24): Promise<any> {
   const sql = `
     select evt, count(*)::int c from telemetry_events where t >= $1 group by 1 order by 2 desc
   `;
-  if (CONFIG.DEBUG_DB) console.log('[db] counts sql', sql, 'since', since.toISOString());
+  if (CONFIG.DEBUG_DB) log.debug('[db] counts sql', { sql, since: since.toISOString() });
   const q = await pool.query(sql, [since]);
   const total = (await pool.query(`select count(*)::int c from telemetry_events where t >= $1`, [since])).rows[0]?.c || 0;
   return { since, total, byEvent: Object.fromEntries(q.rows.map(r=>[r.evt, r.c])) };
 }
 
 export async function dbHealth(): Promise<any> {
-  const url = getUrl();
-  if (!url) return { enabled: false, error: 'DATABASE_URL not set' };
   try {
+    if (!dbEnabled()) {
+      return { enabled: false, ok: false, error: 'DB not configured (set DATABASE_URL or PGHOST/PGUSER/PGDATABASE)' };
+    }
     if (!pool) pool = buildPool();
-  const r = await pool.query('select version()');
-    return { enabled: true, ok: true, version: r.rows?.[0]?.version };
+    const r = await pool.query('select current_database() as db, version() as version');
+    return { enabled: true, ok: true, db: r.rows?.[0]?.db, version: r.rows?.[0]?.version };
   } catch (e: any) {
+    log.error('[db] health error', { error: String(e?.message || e) });
     return { enabled: true, ok: false, error: String(e?.message || e) };
   }
 }

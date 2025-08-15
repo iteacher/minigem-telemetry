@@ -4,6 +4,7 @@ import { CONFIG } from './config.js';
 import { validateEnvelope, validateEvent, normalizeEvent } from './validate.js';
 import { initGeo, lookup } from './geo.js';
 import { dbEnabled, dbInit, dbInsertEvent, dbReadStats, dbHealth, dbRecent, dbCounts } from './db.js';
+import { log } from './logger.js';
 
 function h(req: FastifyRequest, name: string): string | undefined {
   const v = req.headers[name.toLowerCase()];
@@ -52,9 +53,16 @@ function resolveGeo(req: FastifyRequest, ip: string): { country: string; region:
 }
 
 async function main() {
-  const app: FastifyInstance = Fastify({ logger: true, bodyLimit: CONFIG.MAX_BODY, trustProxy: true });
+  const app: FastifyInstance = Fastify({ logger: false, bodyLimit: CONFIG.MAX_BODY, trustProxy: true });
+  // Global and per-request logging
+  process.on('uncaughtException', (e) => log.error('uncaughtException', String(e)));
+  process.on('unhandledRejection', (e) => log.error('unhandledRejection', String(e)));
+  app.addHook('onRequest', async (req) => { log.info('req', { method: req.method, url: req.url, ip: (req as any).ip }); });
+  app.addHook('onResponse', async (req, reply) => { log.info('res', { method: req.method, url: req.url, status: reply.statusCode }); });
+  log.info('boot.start', { port: CONFIG.PORT });
   await initGeo();
   await dbInit();
+  log.info('boot.dbInit.done', { enabled: dbEnabled() });
 
   await app.register(rateLimit, { max: CONFIG.RATE_LIMIT_MAX, timeWindow: CONFIG.RATE_LIMIT_TIME_WINDOW });
 
@@ -91,7 +99,7 @@ async function main() {
       const to = typeof q.to === 'string' ? q.to : undefined;
       const data = await dbReadStats(CONFIG.STATS_WINDOW_DAYS, from, to);
       if (CONFIG.DEBUG_STATS_TRACE && q.debug === '1') {
-        (req as any).log?.info?.({ from, to, trace: (data as any)?._trace }, 'stats trace');
+        log.info('stats.trace', { from, to, trace: (data as any)?._trace });
       }
       if (data) return data; // DB-backed stats
       return reply.code(204).send();
@@ -133,7 +141,7 @@ async function main() {
       const raw: any = (req as any).body;
       const schema = typeof raw?.schema === 'string' ? raw.schema.trim().toLowerCase() : '';
       if (schema !== 'jwc.v1') {
-        (req as any).log.warn({ got: raw?.schema }, 'schema not supported');
+  log.warn('schema not supported', { got: raw?.schema });
         return reply.code(400).send({ error: 'schema_unsupported', expected: 'jwc.v1' });
       }
 
@@ -144,23 +152,23 @@ async function main() {
       let accepted = 0, skipped = 0;
       for (const evRaw of batchRaw) {
         const ev = normalizeEvent(evRaw);
-        if (!ev || !validateEvent(ev)) { skipped++; (req as any).log.warn({ evRaw }, 'event skipped: invalid'); continue; }
-        try { await dbInsertEvent(ev, geo); accepted++; (req as any).log?.info?.({ ev, geo }, 'ingest: inserted'); }
+        if (!ev || !validateEvent(ev)) { skipped++; log.warn('event skipped: invalid', { evRaw }); continue; }
+        try { await dbInsertEvent(ev, geo); accepted++; log.info('ingest: inserted', { ev, geo }); }
         catch (e) {
-          (req as any).log.error({ err: String(e), ev }, 'db insert failed');
+          log.error('db insert failed', { err: String(e), ev });
           skipped++; continue;
         }
       }
-      (req as any).log?.info?.({ accepted, skipped }, 'ingest: batch result');
+      log.info('ingest: batch result', { accepted, skipped });
       return { ok: true, accepted, skipped };
     } catch (e) {
-      (req as any).log.error(e);
+      log.error('server_error', e);
       return reply.code(500).send({ error: 'server_error' });
     }
   });
 
-  await app.listen({ port: CONFIG.PORT, host: '127.0.0.1' });
-  app.log.info(`telemetry ingest listening on ${CONFIG.PORT}`);
+  await app.listen({ port: CONFIG.PORT, host: '0.0.0.0' });
+  log.info('boot.listen', { url: `http://0.0.0.0:${CONFIG.PORT}` });
 }
 
 main().catch(err => { console.error('fatal:', err); process.exit(1); });
