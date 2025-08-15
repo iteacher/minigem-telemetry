@@ -4,7 +4,7 @@ const EVENTS = new Set([
   'feature.webview.open','feature.theme.change',
   'feature.customCss.enable','feature.customCss.disable',
   'settings.changed','error.unhandled','telemetry.optout','telemetry.optin',
-  'test.ping'
+  'test.ping','install.created'
 ]);
 
 export function validateEnvelope(body: any): body is { schema: string; sentAt: number; batch: any[] } {
