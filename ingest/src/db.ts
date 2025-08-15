@@ -199,7 +199,7 @@ export async function dbReadStats(windowDays: number, fromS?: string, toS?: stri
   const client = await pool.connect();
   try {
     let to = new Date();
-    let from = new Date(to.getTime() - (windowDays-1) * 86400000);
+    let from = new Date(to.getTime() - windowDays * 86400000);  // Fix: use windowDays, not windowDays-1
     if (fromS && toS) {
       // Parse YYYY-MM-DD inputs; inclusive range for days
       const ft = new Date(fromS + 'T00:00:00Z');
@@ -208,6 +208,8 @@ export async function dbReadStats(windowDays: number, fromS?: string, toS?: stri
         from = ft; to = tt;
       }
     }
+
+    if (CONFIG.DEBUG_DB) log.debug('[db] stats date range', { from: from.toISOString(), to: to.toISOString(), windowDays });
 
     // Totals and KPIs
   const qTotalsSql = `
