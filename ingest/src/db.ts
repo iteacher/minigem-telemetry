@@ -54,7 +54,7 @@ export async function dbInit(): Promise<void> {
   try {
     if (CONFIG.DEBUG_DB) log.debug('[db] ping');
     await client.query('select 1');
-    if (CONFIG.DEBUG_DB) log.debug('[db] creating table/indexes if not exist');
+    if (CONFIG.DEBUG_DB) log.debug('[db] creating table if not exists');
     await client.query(`
       create table if not exists telemetry_events (
         id bigserial primary key,
@@ -78,18 +78,10 @@ export async function dbInit(): Promise<void> {
         exception_hash text,
         m jsonb
       );
-      create index if not exists idx_events_t on telemetry_events (t);
-      create index if not exists idx_events_evt on telemetry_events (evt);
-      create index if not exists idx_events_country on telemetry_events (country);
-      create index if not exists idx_events_os on telemetry_events (os);
-      create index if not exists idx_events_ext on telemetry_events (ext);
-      create index if not exists idx_events_vscode on telemetry_events (vscode);
-  create index if not exists idx_events_anon on telemetry_events (anon);
-  create index if not exists idx_events_session on telemetry_events (session_id);
     `);
 
-    // Ensure columns exist if table predated this migration
-  if (CONFIG.DEBUG_DB) log.debug('[db] migrating columns if needed');
+    // Ensure columns exist if table predated this migration (must be before creating indexes on them)
+    if (CONFIG.DEBUG_DB) log.debug('[db] migrating columns if needed');
     await client.query(`
       alter table telemetry_events
         add column if not exists duration_ms bigint,
@@ -101,6 +93,19 @@ export async function dbInit(): Promise<void> {
         add column if not exists truncated_output boolean,
         add column if not exists error_phase text,
         add column if not exists exception_hash text;
+    `);
+
+    // Indexes (safe to create after columns are guaranteed to exist)
+    if (CONFIG.DEBUG_DB) log.debug('[db] creating indexes if not exist');
+    await client.query(`
+      create index if not exists idx_events_t on telemetry_events (t);
+      create index if not exists idx_events_evt on telemetry_events (evt);
+      create index if not exists idx_events_country on telemetry_events (country);
+      create index if not exists idx_events_os on telemetry_events (os);
+      create index if not exists idx_events_ext on telemetry_events (ext);
+      create index if not exists idx_events_vscode on telemetry_events (vscode);
+      create index if not exists idx_events_anon on telemetry_events (anon);
+      create index if not exists idx_events_session on telemetry_events (session_id);
     `);
   } finally {
     client.release();

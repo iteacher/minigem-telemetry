@@ -1,5 +1,6 @@
 export const CONFIG = {
-  PORT: parseInt(process.env.PORT || '5432', 10),
+  // HTTP server port: always prefer platform-injected PORT; never default to DB port
+  PORT: Number.isFinite(parseInt(process.env.PORT || '', 10)) ? parseInt(process.env.PORT as string, 10) : 3000,
   LOG_DIR: process.env.LOG_DIR || '/opt/jwc-telemetry/logs/events-transformed',
   MAX_BODY: 64 * 1024,
   YEARLY_SALT: process.env.YEARLY_SALT || 'jwc-2025-salt',
