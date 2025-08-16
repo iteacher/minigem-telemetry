@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Java Web Console – Installs Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <style>
+      :root{ --bg:#0b1020; --card:#0f1628; --muted:#9aa7bd; --text:#e6edf6; --grid:#22304a; --accent:#60a5fa; }
+      body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,Segoe UI,Inter,Roboto,Helvetica,Arial,sans-serif}
+      .wrap{max-width:1100px;margin:0 auto;padding:28px}
+      header{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px}
+      h1{margin:0;font-size:22px;font-weight:800}
+      .subtitle{color:var(--muted);font-size:12px}
+      .grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));margin-top:16px}
+      .card{background:var(--card);border:1px solid #1f2a44;border-radius:14px;padding:16px}
+      .kpi{display:flex;gap:12px;align-items:baseline}
+      .kpi .v{font-size:28px;font-weight:800}
+      table{width:100%;border-collapse:collapse}
+      th,td{padding:8px;border-bottom:1px solid #1f2a44;text-align:left}
+      th{color:#c7d2fe;font-size:12px;letter-spacing:.04em;text-transform:uppercase}
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <h1>Installs Overview</h1>
+        <div class="subtitle" id="meta">–</div>
+      </header>
+
+      <div class="grid">
+        <div class="card kpi"><div>Total Installs</div><div class="v" id="installsTotal">0</div></div>
+        <div class="card"><canvas id="dailyInstalls" height="120"></canvas></div>
+        <div class="card"><canvas id="extVersions" height="160"></canvas></div>
+        <div class="card"><canvas id="osPie" height="160"></canvas></div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <h3 style="margin-top:0">Installs by Country</h3>
+        <table id="countryTable"><thead><tr><th>Country</th><th>Installs</th></tr></thead><tbody></tbody></table>
+      </div>
+    </div>
+
+    <script>
+      const axisColor = getComputedStyle(document.documentElement).getPropertyValue('--muted');
+      const gridColor = getComputedStyle(document.documentElement).getPropertyValue('--grid');
+      const common = { responsive:true, plugins:{ legend:{ labels:{ color:axisColor } } }, scales:{ x:{ grid:{ color:gridColor }, ticks:{ color:axisColor } }, y:{ grid:{ color:gridColor }, ticks:{ color:axisColor }, beginAtZero:true } } };
+      let charts = {};
+      const upsert = (id, cfg)=>{ if(!charts[id]) charts[id]=new Chart(document.querySelector(id), cfg); else { charts[id].data=cfg.data; charts[id].options=cfg.options; charts[id].update(); } };
+
+      async function load(){
+        const res = await fetch('/stats/install');
+        if(!res.ok){ document.getElementById('meta').textContent = 'Failed to load ('+res.status+')'; return; }
+        const s = await res.json();
+        document.getElementById('meta').textContent = `Window: ${s.from} → ${s.to} • Updated ${new Date().toLocaleTimeString()}`;
+        document.getElementById('installsTotal').textContent = (s.installsTotal||0).toLocaleString();
+
+        const daily = s.dailyInstalls||{dates:[],counts:[]};
+        upsert('#dailyInstalls', { type:'line', data:{ labels: daily.dates, datasets:[{ label:'Installs', data: daily.counts, borderColor:'#60a5fa', backgroundColor:'rgba(96,165,250,.2)', fill:true, tension:.25 }] }, options: common });
+
+        const byExt = s.byExt||{}; const extEnt = Object.entries(byExt).sort((a,b)=>b[1]-a[1]);
+        upsert('#extVersions', { type:'bar', data:{ labels: extEnt.map(e=>e[0]), datasets:[{ label:'Installs', data: extEnt.map(e=>e[1]), backgroundColor:'rgba(167,139,250,.35)', borderColor:'#a78bfa' }] }, options: common });
+
+        const byOs = s.byOs||{}; const osEnt = Object.entries(byOs).sort((a,b)=>b[1]-a[1]);
+        upsert('#osPie', { type:'doughnut', data:{ labels: osEnt.map(e=>e[0]), datasets:[{ data: osEnt.map(e=>e[1]) }] }, options:{ responsive:true, plugins:{ legend:{ labels:{ color:axisColor } } } } });
+
+        const tbody = document.querySelector('#countryTable tbody');
+        const byCountry = s.byCountry||{}; const countryEnt = Object.entries(byCountry).sort((a,b)=>b[1]-a[1]);
+        tbody.innerHTML = countryEnt.map(([k,v])=>`<tr><td>${k}</td><td>${v}</td></tr>`).join('');
+      }
+
+      load();
+      setInterval(load, 15000);
+    </script>
+  </body>
+  </html>

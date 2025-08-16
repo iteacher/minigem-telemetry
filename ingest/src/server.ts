@@ -3,7 +3,7 @@ import rateLimit from '@fastify/rate-limit';
 import { CONFIG } from './config.js';
 import { validateEnvelope, validateEvent, normalizeEvent } from './validate.js';
 import { initGeo, lookup } from './geo.js';
-import { dbEnabled, dbInit, dbInsertEvent, dbReadStats, dbHealth, dbRecent, dbCounts } from './db.js';
+import { dbEnabled, dbInit, dbInsertEvent, dbReadStats, dbHealth, dbRecent, dbCounts, dbUpsertInstallCounters, dbReadInstallStats } from './db.js';
 import { log } from './logger.js';
 
 function h(req: FastifyRequest, name: string): string | undefined {
@@ -161,6 +161,19 @@ async function main() {
     }
   });
 
+  // Minimal installs-only stats for simplified dashboard
+  app.get('/stats/install', async (req: FastifyRequest, reply: FastifyReply) => {
+    try {
+      if (!dbEnabled()) return reply.code(503).send({ error: 'db_disabled' });
+      const data = await dbReadInstallStats(CONFIG.STATS_WINDOW_DAYS);
+      if (!data) return reply.code(204).send();
+      return data;
+    } catch (e) {
+      log.error('stats.install.error', { err: String(e) });
+      return reply.code(500).send({ error: 'server_error' });
+    }
+  });
+
   app.post('/t', async (req: FastifyRequest, reply: FastifyReply) => {
     try {
       // Ingest requires DB; no file fallbacks.
@@ -182,7 +195,14 @@ async function main() {
       for (const evRaw of batchRaw) {
         const ev = normalizeEvent(evRaw);
         if (!ev || !validateEvent(ev)) { skipped++; log.warn('event skipped: invalid', { evRaw }); continue; }
-        try { await dbInsertEvent(ev, geo); accepted++; log.info('ingest: inserted', { ev, geo }); }
+        try {
+          // Always write raw event for audit if desired in future
+          await dbInsertEvent(ev, geo);
+          // Update counters for installs-only model
+          await dbUpsertInstallCounters(ev, geo);
+          accepted++;
+          log.info('ingest: inserted', { ev, geo });
+        }
         catch (e) {
           log.error('db insert failed', { err: String(e), ev });
           skipped++; continue;

@@ -1,10 +1,6 @@
 const EVENTS = new Set([
-  'lifecycle.activate','lifecycle.deactivate','extension.upgraded',
-  'java.run.started','java.run.completed','java.run.error',
-  'feature.webview.open','feature.theme.change',
-  'feature.customCss.enable','feature.customCss.disable',
-  'settings.changed','error.unhandled','telemetry.optout','telemetry.optin',
-  'test.ping','install.created'
+  'install.created',
+  'extension.upgraded'
 ]);
 
 export function validateEnvelope(body: any): body is { schema: string; sentAt: number; batch: any[] } {

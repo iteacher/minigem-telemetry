@@ -112,6 +112,131 @@ export async function dbInit(): Promise<void> {
   }
 }
 
+// --- Installs-only counters schema ---
+async function ensureCounterTables(): Promise<void> {
+  if (!dbEnabled()) return;
+  if (!pool) pool = buildPool();
+  const client = await pool.connect();
+  try {
+    await client.query(`
+      create table if not exists install_total (
+        id int primary key default 1,
+        c bigint not null default 0
+      );
+      insert into install_total (id, c) values (1, 0) on conflict (id) do nothing;
+
+      create table if not exists install_daily (
+        day date primary key,
+        c bigint not null default 0
+      );
+
+      create table if not exists install_by_ext (
+        ext text primary key,
+        c bigint not null default 0
+      );
+
+      create table if not exists install_by_os (
+        os text primary key,
+        c bigint not null default 0
+      );
+
+      create table if not exists install_by_country (
+        country text primary key,
+        c bigint not null default 0
+      );
+    `);
+  } finally {
+    client.release();
+  }
+}
+
+// Call counters table creation as part of init
+const _initCounters = (async () => { try { await ensureCounterTables(); } catch { /* ignore until pool ready */ } })();
+
+export async function dbUpsertInstallCounters(ev: any, geo?: { country?: string }): Promise<void> {
+  if (!dbEnabled()) return;
+  if (!pool) pool = buildPool();
+  // Ensure tables
+  await ensureCounterTables();
+  const client = await pool.connect();
+  try {
+    const eventName: string = ev.evt;
+    const isInstall = eventName === 'install.created';
+    const isUpgrade = eventName === 'extension.upgraded';
+    if (!isInstall && !isUpgrade) return; // ignore others
+
+    const ext = ev.ext || 'unknown';
+    const os = ev.os || 'unknown';
+    const country = (geo?.country || 'Unknown').toUpperCase();
+    const tnum = typeof ev.t === 'number' ? ev.t : Date.parse(ev.t);
+    const ms = tnum < 1e12 ? tnum * 1000 : tnum;
+    const day = new Date(ms).toISOString().slice(0,10); // YYYY-MM-DD UTC
+
+    const queries: Array<{ text: string; values?: any[] }> = [];
+    if (isInstall) {
+      queries.push({ text: `update install_total set c = c + 1 where id=1` });
+      queries.push({ text: `insert into install_daily(day,c) values ($1,1) on conflict (day) do update set c = install_daily.c + 1`, values: [day] });
+      queries.push({ text: `insert into install_by_os(os,c) values ($1,1) on conflict (os) do update set c = install_by_os.c + 1`, values: [os] });
+      queries.push({ text: `insert into install_by_country(country,c) values ($1,1) on conflict (country) do update set c = install_by_country.c + 1`, values: [country] });
+    }
+    // Both install and upgrade increment per-version tally
+    queries.push({ text: `insert into install_by_ext(ext,c) values ($1,1) on conflict (ext) do update set c = install_by_ext.c + 1`, values: [ext] });
+
+    for (const q of queries) {
+      if (CONFIG.DEBUG_DB) log.debug('[db] upsert counter', { sql: q.text, values: q.values });
+      await client.query(q.text, q.values);
+    }
+  } finally {
+    client.release();
+  }
+}
+
+export async function dbReadInstallStats(windowDays: number): Promise<any> {
+  if (!dbEnabled()) return null;
+  if (!pool) pool = buildPool();
+  await ensureCounterTables();
+  const client = await pool.connect();
+  try {
+    const to = new Date();
+    const from = new Date(to.getTime() - (windowDays-1) * 86400000);
+    const fromStr = from.toISOString().slice(0,10);
+    const toStr = to.toISOString().slice(0,10);
+
+    const [qTotal, qDaily, qByExt, qByOs, qByCountry] = await Promise.all([
+      client.query(`select c::bigint as total from install_total where id=1`),
+      client.query(`
+        with days as (
+          select generate_series(date_trunc('day',$1::timestamptz), date_trunc('day',$2::timestamptz), '1 day')::date d
+        )
+        select to_char(d.d,'YYYY-MM-DD') as day, coalesce(i.c,0)::int as c
+        from days d
+        left join install_daily i on i.day = d.d
+        order by d.d
+      `, [from, to]),
+      client.query(`select ext as k, c::bigint as v from install_by_ext order by v desc`),
+      client.query(`select os as k, c::bigint as v from install_by_os order by v desc`),
+      client.query(`select country as k, c::bigint as v from install_by_country order by v desc`),
+    ]);
+
+    const total = Number(qTotal.rows[0]?.total || 0);
+    const daily = { dates: qDaily.rows.map(r=>r.day), counts: qDaily.rows.map(r=>Number(r.c||0)) };
+    const objFrom = (rows:any[]) => Object.fromEntries(rows.map(r=>[r.k, Number(r.v||0)]));
+
+    return {
+      from: fromStr,
+      to: toStr,
+      windowDays,
+      installsTotal: total,
+      dailyInstalls: daily,
+      byExt: objFrom(qByExt.rows),
+      byOs: objFrom(qByOs.rows),
+      byCountry: objFrom(qByCountry.rows)
+    };
+  } finally {
+    client.release();
+  }
+}
+
 export async function dbInsertEvent(ev: any, geo?: { country: string; region: string }): Promise<void> {
   if (!dbEnabled()) return;
   if (!pool) pool = buildPool();
@@ -198,10 +323,8 @@ export async function dbReadStats(windowDays: number, fromS?: string, toS?: stri
   const trace: any[] = [];
   const client = await pool.connect();
   try {
-    // Show ALL data - NO date restrictions ever!
-    let from = new Date('1970-01-01T00:00:00Z');  // Start from Unix epoch
-    let to = new Date('2099-12-31T23:59:59Z');    // Go way into the future
-    
+    let to = new Date();
+    let from = new Date(to.getTime() - (windowDays-1) * 86400000);
     if (fromS && toS) {
       // Parse YYYY-MM-DD inputs; inclusive range for days
       const ft = new Date(fromS + 'T00:00:00Z');
@@ -211,8 +334,6 @@ export async function dbReadStats(windowDays: number, fromS?: string, toS?: stri
       }
     }
 
-    if (CONFIG.DEBUG_DB) log.debug('[db] stats date range', { from: from.toISOString(), to: to.toISOString(), windowDays });
-
     // Totals and KPIs
   const qTotalsSql = `
       select
@@ -221,8 +342,8 @@ export async function dbReadStats(windowDays: number, fromS?: string, toS?: stri
       from telemetry_events
       where t >= $1 and t < $2
   `;
-  trace.push({ sql: qTotalsSql, params: [from, to] });
-  if (CONFIG.DEBUG_DB) log.debug('[db] stats.qTotals', { sql: qTotalsSql, params: [from, to] });
+  trace.push({ sql: qTotalsSql, params: [from,to] });
+  if (CONFIG.DEBUG_DB) log.debug('[db] stats.qTotals', { sql: qTotalsSql, params: [from,to] });
   const qTotals = await client.query(qTotalsSql, [from, to]);
     const totals = qTotals.rows[0] || { total:0, uniques:0 };
 
@@ -547,8 +668,8 @@ export async function dbReadStats(windowDays: number, fromS?: string, toS?: stri
     }));
 
   const res: any = {
-      from: from.toISOString().slice(0,10),
-      to: to.toISOString().slice(0,10),
+      from: dailyDates[0] || new Date(from).toISOString().slice(0,10),
+      to: dailyDates[dailyDates.length-1] || new Date(to).toISOString().slice(0,10),
       windowDays,
       total,
       uniques,
