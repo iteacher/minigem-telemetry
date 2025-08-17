@@ -9,6 +9,12 @@ A privacy-focused, lightweight telemetry system for tracking application install
 
 This system collects installation and usage telemetry from any application and provides a comprehensive analytics dashboard. The design prioritizes privacy (anonymous user tracking), performance (JSON file storage), and ease of deployment (single Node.js service with static dashboard).
 
+## Dashboard Preview
+
+![Minigem Analytics Dashboard](dashboard/assets/demo.png)
+
+*Professional analytics dashboard showing installation metrics, version analytics, platform intelligence, and advanced insights with Chart.js visualizations*
+
 ## Architecture
 
 - **Ingestion Server**: Fastify-based TypeScript service with rate limiting and validation
