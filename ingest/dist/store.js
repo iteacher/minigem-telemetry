@@ -16,7 +16,8 @@ function defaultStore() {
         byOs: {},
         byCountry: {},
         versionsByMonth: {},
-        osByMonth: {}
+        osByMonth: {},
+        geoByMonth: {}
     };
 }
 function readStore() {
@@ -97,6 +98,10 @@ export async function storeUpsertInstall(ev, geo) {
             if (!store.osByMonth[monthKey])
                 store.osByMonth[monthKey] = {};
             store.osByMonth[monthKey][os] = (store.osByMonth[monthKey][os] || 0) + 1;
+            // NEW: Track geographic installs by month
+            if (!store.geoByMonth[monthKey])
+                store.geoByMonth[monthKey] = {};
+            store.geoByMonth[monthKey][country] = (store.geoByMonth[monthKey][country] || 0) + 1;
         }
         store.meta.updatedAt = nowIso;
         writeStore(store);
@@ -141,6 +146,7 @@ export function storeReadInstallStats(windowMonths = 12) {
         byCountry: s.byCountry,
         versionTimeline: generateVersionTimeline(s),
         osTimeline: generateOsTimeline(s),
+        geoTimeline: generateGeoTimeline(s),
         updatedAt: s.meta.updatedAt,
         file: FILE
     };
@@ -192,6 +198,32 @@ function generateOsTimeline(s) {
         months: allMonths,
         osTypes: allOsTypes,
         data: osData
+    };
+}
+function generateGeoTimeline(s) {
+    // Get all months in chronological order
+    const allMonths = [];
+    const years = Object.keys(s.months).sort();
+    for (const y of years) {
+        const monthsInYear = Object.keys(s.months[y] || {}).sort();
+        for (const m of monthsInYear) {
+            allMonths.push(`${y}-${m}`);
+        }
+    }
+    // Get top countries (by total installs) to avoid chart clutter
+    const topCountries = Object.entries(s.byCountry)
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 10) // Show top 10 countries
+        .map(([country]) => country);
+    // Build timeline data for each country
+    const geoData = {};
+    for (const country of topCountries) {
+        geoData[country] = allMonths.map(month => s.geoByMonth[month]?.[country] || 0);
+    }
+    return {
+        months: allMonths,
+        countries: topCountries,
+        data: geoData
     };
 }
 export function pathToStore() { return FILE; }
