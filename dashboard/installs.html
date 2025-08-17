@@ -3,7 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Java Web Console – Analytics Dashboard</title>
+    <title>Minigem Analytics - Java Web Console Dashboard</title>
+    <link rel="icon" type="image/png" sizes="16x16" href="assets/icon16.png">
+    <link rel="icon" type="image/png" sizes="48x48" href="assets/icon48.png">
+    <link rel="icon" type="image/png" sizes="128x128" href="assets/icon128.png">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
@@ -321,7 +324,10 @@
   <body>
     <div class="container">
       <header class="header">
-        <h1>Java Web Console Analytics</h1>
+        <h1>
+          <img src="assets/logo.png" alt="Minigem" style="height: 32px; width: auto; margin-right: 12px; vertical-align: middle;">
+          Minigem Analytics
+        </h1>
         <div class="meta">
           <div class="period" id="datePeriod">Loading...</div>
           <div class="updated" id="lastUpdated">—</div>
@@ -1660,7 +1666,7 @@
           }
         }
 
-        // Growth Trajectory Analysis - Enhanced with explanations and visuals
+        // Growth Trajectory Analysis - Enhanced with Material Symbols
         if (data.growthTrajectory) {
           console.log('Growth trajectory data:', data.growthTrajectory);
           try {
@@ -1671,34 +1677,36 @@
                                     (trajectory.linear?.rSquared || 0) > 0.6 ? 'Good' : 
                                     (trajectory.linear?.rSquared || 0) > 0.4 ? 'Fair' : 'Poor';
               
-              const trendDirection = (trajectory.linear?.slope || 0) > 0 ? '📈 Growing' : '📉 Declining';
+              const trendDirection = (trajectory.linear?.slope || 0) > 0 ? 'Growing' : 'Declining';
+              const trendIcon = (trajectory.linear?.slope || 0) > 0 ? 'trending_up' : 'trending_down';
               const growthSpeed = Math.abs(trajectory.linear?.slope || 0);
               const speedCategory = growthSpeed > 10 ? 'Fast' : growthSpeed > 5 ? 'Moderate' : 'Slow';
               
               infoElement.innerHTML = `
                 <div style="background: linear-gradient(135deg, #1e293b 0%, #334155 100%); padding: 1.5rem; border-radius: 12px; border: 1px solid #475569;">
                   <h4 style="margin: 0 0 1.5rem 0; color: #f1f5f9; font-size: 1.2rem; display: flex; align-items: center; gap: 0.5rem;">
-                    📊 Growth Analysis Dashboard
+                    <span class="material-symbols-outlined" style="font-size: 1.5rem;">analytics</span>
+                    Growth Analysis Dashboard
                   </h4>
                   
                   <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
                     <!-- Trend Direction -->
                     <div style="text-align: center; padding: 1rem; background: rgba(59, 130, 246, 0.1); border-radius: 8px; border: 1px solid rgba(59, 130, 246, 0.3);">
-                      <div style="font-size: 2rem; margin-bottom: 0.5rem;">${trendDirection.split(' ')[0]}</div>
-                      <div style="color: #3b82f6; font-weight: bold; margin-bottom: 0.25rem;">${trendDirection.split(' ')[1]}</div>
+                      <span class="material-symbols-outlined" style="font-size: 2.5rem; margin-bottom: 0.5rem; color: #3b82f6; display: block;">${trendIcon}</span>
+                      <div style="color: #3b82f6; font-weight: bold; margin-bottom: 0.25rem;">${trendDirection}</div>
                       <div style="color: #94a3b8; font-size: 0.9rem;">${speedCategory} Pace</div>
                     </div>
                     
                     <!-- Prediction Accuracy -->
                     <div style="text-align: center; padding: 1rem; background: rgba(16, 185, 129, 0.1); border-radius: 8px; border: 1px solid rgba(16, 185, 129, 0.3);">
-                      <div style="font-size: 2rem; margin-bottom: 0.5rem;">🎯</div>
+                      <span class="material-symbols-outlined" style="font-size: 2.5rem; margin-bottom: 0.5rem; color: #10b981; display: block;">target</span>
                       <div style="color: #10b981; font-weight: bold; margin-bottom: 0.25rem;">${rSquaredQuality}</div>
                       <div style="color: #94a3b8; font-size: 0.9rem;">Predictability</div>
                     </div>
                     
                     <!-- Growth Type -->
                     <div style="text-align: center; padding: 1rem; background: rgba(139, 92, 246, 0.1); border-radius: 8px; border: 1px solid rgba(139, 92, 246, 0.3);">
-                      <div style="font-size: 2rem; margin-bottom: 0.5rem;">${trajectory.exponential?.trend === 'Exponential Growth' ? '🚀' : '📊'}</div>
+                      <span class="material-symbols-outlined" style="font-size: 2.5rem; margin-bottom: 0.5rem; color: #8b5cf6; display: block;">${trajectory.exponential?.trend === 'Exponential Growth' ? 'rocket_launch' : 'show_chart'}</span>
                       <div style="color: #8b5cf6; font-weight: bold; margin-bottom: 0.25rem;">${trajectory.exponential?.trend || 'Linear'}</div>
                       <div style="color: #94a3b8; font-size: 0.9rem;">Growth Pattern</div>
                     </div>
@@ -1708,7 +1716,8 @@
                     <!-- Left Column: Technical Details -->
                     <div style="background: rgba(15, 23, 42, 0.8); padding: 1rem; border-radius: 8px; border: 1px solid #334155;">
                       <h5 style="margin: 0 0 1rem 0; color: #e2e8f0; display: flex; align-items: center; gap: 0.5rem;">
-                        🔍 Technical Analysis
+                        <span class="material-symbols-outlined" style="font-size: 1.2rem;">search</span>
+                        Technical Analysis
                       </h5>
                       <div style="color: #cbd5e1; line-height: 1.6;">
                         <div style="margin-bottom: 0.75rem;">
@@ -1729,7 +1738,8 @@
                     <!-- Right Column: Predictions & Actions -->
                     <div style="background: rgba(15, 23, 42, 0.8); padding: 1rem; border-radius: 8px; border: 1px solid #334155;">
                       <h5 style="margin: 0 0 1rem 0; color: #e2e8f0; display: flex; align-items: center; gap: 0.5rem;">
-                        🔮 Predictions & Actions
+                        <span class="material-symbols-outlined" style="font-size: 1.2rem;">crystal_ball</span>
+                        Predictions & Actions
                       </h5>
                       <div style="color: #cbd5e1; line-height: 1.6;">
                         <div style="margin-bottom: 0.75rem;">
@@ -1737,15 +1747,18 @@
                           <strong style="color: #f1f5f9;">Next 3 Months:</strong> ${trajectory.prediction?.next3Months || 'N/A'} installs
                         </div>
                         <div style="padding: 0.75rem; background: rgba(59, 130, 246, 0.1); border-radius: 6px; border-left: 3px solid #3b82f6;">
-                          <strong style="color: #3b82f6;">💡 Recommendation:</strong><br>
+                          <strong style="color: #3b82f6; display: flex; align-items: center; gap: 0.5rem;">
+                            <span class="material-symbols-outlined" style="font-size: 1rem;">lightbulb</span>
+                            Recommendation:
+                          </strong><br>
                           <div style="margin-top: 0.5rem; color: #cbd5e1;">
                             ${(trajectory.linear?.rSquared || 0) > 0.8 ? 
-                              '✅ Growth is predictable - maintain current strategies' : 
-                              '⚠️ High volatility - need more consistent marketing'}
+                              '<span class="material-symbols-outlined" style="font-size: 1rem; color: #10b981; vertical-align: middle;">check_circle</span> Growth is predictable - maintain current strategies' : 
+                              '<span class="material-symbols-outlined" style="font-size: 1rem; color: #f59e0b; vertical-align: middle;">warning</span> High volatility - need more consistent marketing'}
                             <br>
                             ${(trajectory.linear?.slope || 0) > 0 ? 
-                              '📈 Positive trajectory - consider scaling efforts' : 
-                              '🔧 Growth declining - intervention needed'}
+                              '<span class="material-symbols-outlined" style="font-size: 1rem; color: #3b82f6; vertical-align: middle;">trending_up</span> Positive trajectory - consider scaling efforts' : 
+                              '<span class="material-symbols-outlined" style="font-size: 1rem; color: #ef4444; vertical-align: middle;">build</span> Growth declining - intervention needed'}
                           </div>
                         </div>
                       </div>
@@ -1755,7 +1768,8 @@
                   <!-- Bottom: Quick Explanations -->
                   <div style="margin-top: 1.5rem; padding: 1rem; background: rgba(6, 182, 212, 0.1); border-radius: 8px; border: 1px solid rgba(6, 182, 212, 0.3);">
                     <h6 style="margin: 0 0 0.75rem 0; color: #06b6d4; display: flex; align-items: center; gap: 0.5rem;">
-                      📚 Quick Guide
+                      <span class="material-symbols-outlined" style="font-size: 1.1rem;">menu_book</span>
+                      Quick Guide
                     </h6>
                     <div style="color: #94a3b8; font-size: 0.85rem; line-height: 1.5;">
                       <strong>Slope:</strong> How many installs increase/decrease per month | 
@@ -1771,49 +1785,44 @@
           }
         }
 
-        // Version Lifecycle Chart - Redesigned for better visualization
+        // Version Lifecycle Chart - Bar chart showing version distribution
         if (data.versionMigration && typeof data.versionMigration === 'object') {
           try {
             const activeVersions = Object.entries(data.versionMigration)
               .filter(([v, vData]) => vData && vData.currentInstalls > 0)
               .sort(([,a], [,b]) => b.currentInstalls - a.currentInstalls)
-              .slice(0, 8);
+              .slice(0, 10);
             
             if (activeVersions.length > 0) {
-              // Instead of bubble chart, use a more meaningful scatter plot
-              // X-axis: Days since release, Y-axis: Current adoption rate
-              const maxInstalls = Math.max(...activeVersions.map(([,vData]) => vData.currentInstalls));
-              
+              // Use a bar chart to show version adoption clearly
               createOrUpdateChart('#lifecycleChart', {
-                type: 'scatter',
+                type: 'bar',
                 data: {
+                  labels: activeVersions.map(([version]) => `v${version}`),
                   datasets: [{
-                    label: 'Active Versions',
-                    data: activeVersions.map(([version, vData], index) => {
-                      // Create more meaningful X positioning based on version age/adoption
-                      const adoptionSpeed = vData.adoptionMonths || (index + 1) * 0.5; // Fallback to spread
-                      const adoptionRate = ((vData.currentInstalls / maxInstalls) * 100) || (Math.random() * 50 + 10);
-                      const bubbleSize = Math.sqrt(vData.currentInstalls || 10) / 2 + 5;
-                      
-                      return {
-                        x: adoptionSpeed + (Math.random() * 0.4 - 0.2), // Add slight jitter to avoid overlap
-                        y: adoptionRate,
-                        r: Math.min(bubbleSize, 20), // Cap bubble size
-                        version: version,
-                        installs: vData.currentInstalls || 0,
-                        peak: vData.peakValue || 0
-                      };
-                    }),
+                    label: 'Current Installs',
+                    data: activeVersions.map(([, vData]) => vData.currentInstalls || 0),
                     backgroundColor: activeVersions.map((_, index) => {
-                      // Color gradient from newest (blue) to oldest (red)
-                      const ratio = index / (activeVersions.length - 1);
-                      const r = Math.round(59 + ratio * (239 - 59));   // 59 to 239
-                      const g = Math.round(130 - ratio * (130 - 68));  // 130 to 68
-                      const b = Math.round(246 - ratio * (246 - 68));  // 246 to 68
-                      return `rgba(${r}, ${g}, ${b}, 0.7)`;
+                      // Color gradient from newest (green) to oldest (orange to red)
+                      if (index < 2) return '#10b981'; // Newest versions - green
+                      if (index < 5) return '#3b82f6'; // Recent versions - blue  
+                      if (index < 8) return '#f59e0b'; // Older versions - orange
+                      return '#ef4444'; // Oldest versions - red
                     }),
-                    borderColor: '#fff',
-                    borderWidth: 2
+                    borderRadius: 4,
+                    borderSkipped: false,
+                  }, {
+                    label: 'Peak Installs',
+                    data: activeVersions.map(([, vData]) => vData.peakValue || 0),
+                    backgroundColor: activeVersions.map((_, index) => {
+                      // Lighter version of the same colors
+                      if (index < 2) return 'rgba(16, 185, 129, 0.3)';
+                      if (index < 5) return 'rgba(59, 130, 246, 0.3)';
+                      if (index < 8) return 'rgba(245, 158, 11, 0.3)';
+                      return 'rgba(239, 68, 68, 0.3)';
+                    }),
+                    borderRadius: 4,
+                    borderSkipped: false,
                   }]
                 },
                 options: {
@@ -1821,25 +1830,18 @@
                   maintainAspectRatio: false,
                   scales: {
                     x: {
-                      title: {
-                        display: true,
-                        text: 'Adoption Speed (months to 80% adoption)',
-                        color: '#9ca3af'
-                      },
                       ticks: { color: '#9ca3af' },
-                      grid: { color: '#374151' },
-                      min: 0
+                      grid: { display: false }
                     },
                     y: {
                       title: {
                         display: true,
-                        text: 'Current Market Share (%)',
+                        text: 'Install Count',
                         color: '#9ca3af'
                       },
                       ticks: { color: '#9ca3af' },
                       grid: { color: '#374151' },
-                      min: 0,
-                      max: 100
+                      beginAtZero: true
                     }
                   },
                   plugins: {
@@ -1847,39 +1849,21 @@
                       display: true,
                       position: 'top',
                       labels: {
-                        color: '#9ca3af',
-                        generateLabels: function() {
-                          return [
-                            {
-                              text: 'Newer Versions',
-                              fillStyle: 'rgba(59, 130, 246, 0.7)',
-                              strokeStyle: '#fff',
-                              pointStyle: 'circle'
-                            },
-                            {
-                              text: 'Older Versions', 
-                              fillStyle: 'rgba(239, 68, 68, 0.7)',
-                              strokeStyle: '#fff',
-                              pointStyle: 'circle'
-                            }
-                          ];
-                        }
+                        color: '#9ca3af'
                       }
                     },
                     tooltip: {
                       callbacks: {
                         title: function(context) {
-                          return `Version ${context[0].raw.version}`;
+                          const versionIndex = context[0].dataIndex;
+                          const [version, vData] = activeVersions[versionIndex];
+                          return `Version ${version}`;
                         },
-                        label: function(context) {
-                          const point = context.parsed;
-                          const data = context.raw;
-                          return [
-                            `Market Share: ${point.y.toFixed(1)}%`,
-                            `Adoption Speed: ${point.x.toFixed(1)} months`, 
-                            `Current Installs: ${data.installs}`,
-                            `Peak Installs: ${data.peak || 'N/A'}`
-                          ];
+                        afterBody: function(context) {
+                          const versionIndex = context[0].dataIndex;
+                          const [version, vData] = activeVersions[versionIndex];
+                          const adoptionMonths = vData.adoptionMonths || 'Unknown';
+                          return `Adoption Time: ${adoptionMonths} months`;
                         }
                       }
                     }
