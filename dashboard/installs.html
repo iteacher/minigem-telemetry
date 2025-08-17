@@ -3,78 +3,815 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Java Web Console – Installs Dashboard</title>
+    <title>Java Web Console – Analytics Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
     <style>
-      :root{ --bg:#0b1020; --card:#0f1628; --muted:#9aa7bd; --text:#e6edf6; --grid:#22304a; --accent:#60a5fa; }
-      body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,Segoe UI,Inter,Roboto,Helvetica,Arial,sans-serif}
-      .wrap{max-width:1100px;margin:0 auto;padding:28px}
-      header{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px}
-      h1{margin:0;font-size:22px;font-weight:800}
-      .subtitle{color:var(--muted);font-size:12px}
-      .grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));margin-top:16px}
-      .card{background:var(--card);border:1px solid #1f2a44;border-radius:14px;padding:16px}
-      .kpi{display:flex;gap:12px;align-items:baseline}
-      .kpi .v{font-size:28px;font-weight:800}
-      table{width:100%;border-collapse:collapse}
-      th,td{padding:8px;border-bottom:1px solid #1f2a44;text-align:left}
-      th{color:#c7d2fe;font-size:12px;letter-spacing:.04em;text-transform:uppercase}
+      :root {
+        --bg-primary: #0f172a;
+        --bg-secondary: #1e293b;
+        --bg-card: #334155;
+        --bg-accent: #475569;
+        --text-primary: #f8fafc;
+        --text-secondary: #cbd5e1;
+        --text-muted: #94a3b8;
+        --border: #475569;
+        --accent-blue: #3b82f6;
+        --accent-purple: #8b5cf6;
+        --accent-green: #10b981;
+        --accent-orange: #f59e0b;
+        --accent-red: #ef4444;
+        --accent-cyan: #06b6d4;
+        --gradient-primary: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+        --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+        --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        line-height: 1.6;
+        min-height: 100vh;
+      }
+
+      .container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 2rem;
+      }
+
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2.5rem;
+        padding-bottom: 1.5rem;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .header h1 {
+        font-size: 2.25rem;
+        font-weight: 700;
+        background: var(--gradient-primary);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+
+      .header .meta {
+        text-align: right;
+      }
+
+      .header .meta .period {
+        font-size: 0.875rem;
+        color: var(--text-secondary);
+        font-weight: 500;
+      }
+
+      .header .meta .updated {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+      }
+
+      .stats-grid {
+        display: grid;
+        grid-template-columns: 1fr 2fr 1fr;
+        gap: 2rem;
+        margin-bottom: 2.5rem;
+      }
+
+      .stat-card {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border);
+        border-radius: 1rem;
+        padding: 1.5rem;
+        box-shadow: var(--shadow-md);
+        transition: all 0.2s ease;
+      }
+
+      .stat-card:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-lg);
+      }
+
+      .stat-card.highlight {
+        background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-card) 100%);
+        border-color: var(--accent-blue);
+      }
+
+      .stat-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 1rem;
+      }
+
+      .stat-title {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+
+      .stat-icon {
+        width: 2rem;
+        height: 2rem;
+        border-radius: 0.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.25rem;
+        font-family: 'Material Symbols Outlined';
+        font-weight: normal;
+        font-style: normal;
+        line-height: 1;
+        letter-spacing: normal;
+        text-transform: none;
+        display: inline-block;
+        white-space: nowrap;
+        word-wrap: normal;
+        direction: ltr;
+        -webkit-font-feature-settings: 'liga';
+        font-feature-settings: 'liga';
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .stat-value {
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        line-height: 1;
+      }
+
+      .stat-subtitle {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        margin-top: 0.5rem;
+      }
+
+      .charts-grid {
+        display: grid;
+        grid-template-columns: 2fr 1fr;
+        gap: 2rem;
+        margin-bottom: 2.5rem;
+      }
+
+      .chart-card {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border);
+        border-radius: 1rem;
+        padding: 1.5rem;
+        box-shadow: var(--shadow-md);
+      }
+
+      .chart-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 1.5rem;
+      }
+
+      .chart-title {
+        font-size: 1.125rem;
+        font-weight: 600;
+        color: var(--text-primary);
+      }
+
+      .chart-subtitle {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+      }
+
+      .chart-container {
+        position: relative;
+        width: 100%;
+        min-height: 300px;
+      }
+
+      .chart-container.large {
+        min-height: 400px;
+      }
+
+      .versions-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 2rem;
+        margin-bottom: 2.5rem;
+      }
+
+      .bottom-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 2rem;
+      }
+
+      .table-container {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border);
+        border-radius: 1rem;
+        overflow: hidden;
+        box-shadow: var(--shadow-md);
+      }
+
+      .table-header {
+        padding: 1.5rem;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .table-title {
+        font-size: 1.125rem;
+        font-weight: 600;
+        color: var(--text-primary);
+      }
+
+      .table-wrapper {
+        max-height: 400px;
+        overflow-y: auto;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      th, td {
+        padding: 0.75rem 1.5rem;
+        text-align: left;
+        border-bottom: 1px solid var(--border);
+      }
+
+      th {
+        background: var(--bg-card);
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        position: sticky;
+        top: 0;
+      }
+
+      td {
+        font-size: 0.875rem;
+        color: var(--text-primary);
+      }
+
+      tr:hover td {
+        background: var(--bg-card);
+      }
+
+      .country-flag {
+        display: inline-block;
+        width: 1.25rem;
+        height: 1rem;
+        margin-right: 0.5rem;
+        border-radius: 0.125rem;
+        background: var(--bg-accent);
+      }
+
+      @media (max-width: 1200px) {
+        .stats-grid {
+          grid-template-columns: 1fr 1fr 1fr;
+        }
+        
+        .charts-grid {
+          grid-template-columns: 1fr;
+        }
+        
+        .versions-grid {
+          grid-template-columns: 1fr;
+        }
+        
+        .bottom-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 768px) {
+        .container {
+          padding: 1rem;
+        }
+        
+        .stats-grid {
+          grid-template-columns: 1fr;
+        }
+        
+        .header {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 1rem;
+        }
+        
+        .header h1 {
+          font-size: 1.875rem;
+        }
+      }
     </style>
   </head>
   <body>
-    <div class="wrap">
-      <header>
-        <h1>Installs Overview</h1>
-        <div class="subtitle" id="meta">–</div>
+    <div class="container">
+      <header class="header">
+        <h1>Java Web Console Analytics</h1>
+        <div class="meta">
+          <div class="period" id="datePeriod">Loading...</div>
+          <div class="updated" id="lastUpdated">—</div>
+        </div>
       </header>
 
-      <div class="grid">
-        <div class="card kpi"><div>Total Installs</div><div class="v" id="installsTotal">0</div></div>
-        <div class="card"><canvas id="dailyInstalls" height="120"></canvas></div>
-        <div class="card"><canvas id="extVersions" height="160"></canvas></div>
-        <div class="card"><canvas id="osPie" height="160"></canvas></div>
+      <div class="stats-grid">
+        <div class="stat-card highlight">
+          <div class="stat-header">
+            <div class="stat-title">Total Installs</div>
+            <div class="stat-icon" style="background: var(--accent-blue); color: white;">analytics</div>
+          </div>
+          <div class="stat-value" id="totalInstalls">0</div>
+          <div class="stat-subtitle">All-time installations</div>
+        </div>
+        
+        <div class="stat-card">
+          <div class="stat-header">
+            <div class="stat-title">Growth Summary</div>
+            <div class="stat-icon" style="background: var(--accent-green); color: white;">trending_up</div>
+          </div>
+          <div class="stat-value" id="growthValue">+0</div>
+          <div class="stat-subtitle" id="growthInfo">Loading growth data...</div>
+        </div>
+        
+        <div class="stat-card">
+          <div class="stat-header">
+            <div class="stat-title">Time Period</div>
+            <div class="stat-icon" style="background: var(--accent-purple); color: white;">schedule</div>
+          </div>
+          <div class="stat-value" id="monthsCount">0</div>
+          <div class="stat-subtitle" id="periodRange">months tracked</div>
+        </div>
       </div>
 
-      <div class="card" style="margin-top:16px">
-        <h3 style="margin-top:0">Installs by Country</h3>
-        <table id="countryTable"><thead><tr><th>Country</th><th>Installs</th></tr></thead><tbody></tbody></table>
+      <div class="charts-grid">
+        <div class="chart-card">
+          <div class="chart-header">
+            <div>
+              <div class="chart-title">Monthly Installs</div>
+              <div class="chart-subtitle">Installation activity over time</div>
+            </div>
+          </div>
+          <div class="chart-container large">
+            <canvas id="monthlyChart"></canvas>
+          </div>
+        </div>
+
+        <div class="chart-card">
+          <div class="chart-header">
+            <div>
+              <div class="chart-title">OS Distribution</div>
+              <div class="chart-subtitle">Platform breakdown</div>
+            </div>
+          </div>
+          <div class="chart-container">
+            <canvas id="osChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="chart-card" style="margin-bottom: 2.5rem;">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">Version Adoption Timeline</div>
+            <div class="chart-subtitle">Extension version usage patterns over time</div>
+          </div>
+        </div>
+        <div class="chart-container large">
+          <canvas id="versionTimelineChart"></canvas>
+        </div>
+      </div>
+
+      <div class="versions-grid">
+        <div class="chart-card">
+          <div class="chart-header">
+            <div>
+              <div class="chart-title">Extension Versions</div>
+              <div class="chart-subtitle">Version adoption rates</div>
+            </div>
+          </div>
+          <div class="chart-container">
+            <canvas id="versionsChart"></canvas>
+          </div>
+        </div>
+
+        <div class="chart-card">
+          <div class="chart-header">
+            <div>
+              <div class="chart-title">Architecture Types</div>
+              <div class="chart-subtitle">Platform architectures</div>
+            </div>
+          </div>
+          <div class="chart-container">
+            <canvas id="archChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="bottom-grid">
+        <div class="table-container">
+          <div class="table-header">
+            <div class="table-title">Geographic Distribution</div>
+          </div>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Country</th>
+                  <th>Installs</th>
+                  <th>Share</th>
+                </tr>
+              </thead>
+              <tbody id="countryTable">
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="chart-card">
+          <div class="chart-header">
+            <div>
+              <div class="chart-title">Top Countries</div>
+              <div class="chart-subtitle">Geographic distribution</div>
+            </div>
+          </div>
+          <div class="chart-container">
+            <canvas id="countryChart"></canvas>
+          </div>
+        </div>
       </div>
     </div>
 
     <script>
-      const axisColor = getComputedStyle(document.documentElement).getPropertyValue('--muted');
-      const gridColor = getComputedStyle(document.documentElement).getPropertyValue('--grid');
-      const common = { responsive:true, plugins:{ legend:{ labels:{ color:axisColor } } }, scales:{ x:{ grid:{ color:gridColor }, ticks:{ color:axisColor } }, y:{ grid:{ color:gridColor }, ticks:{ color:axisColor }, beginAtZero:true } } };
+      // Color palette for consistent theming
+      const colors = {
+        primary: '#3b82f6',
+        secondary: '#8b5cf6',
+        success: '#10b981',
+        warning: '#f59e0b',
+        danger: '#ef4444',
+        info: '#06b6d4',
+        text: '#f8fafc',
+        textSecondary: '#cbd5e1',
+        textMuted: '#94a3b8',
+        border: '#475569'
+      };
+
+      const chartColors = [
+        '#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', 
+        '#06b6d4', '#f97316', '#84cc16', '#a855f7', '#ec4899',
+        '#14b8a6', '#f59e0b', '#8b5cf6', '#06b6d4', '#ef4444'
+      ];
+
+      // Common chart options
+      const commonOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            labels: {
+              color: colors.textSecondary,
+              font: { family: 'Inter', size: 12 },
+              usePointStyle: true,
+              padding: 20
+            }
+          },
+          tooltip: {
+            backgroundColor: 'rgba(15, 23, 42, 0.9)',
+            titleColor: colors.text,
+            bodyColor: colors.textSecondary,
+            borderColor: colors.border,
+            borderWidth: 1,
+            cornerRadius: 8,
+            font: { family: 'Inter' }
+          }
+        },
+        scales: {
+          x: {
+            grid: { color: colors.border, drawTicks: false },
+            ticks: { 
+              color: colors.textMuted,
+              font: { family: 'Inter', size: 11 },
+              maxRotation: 45
+            },
+            border: { display: false }
+          },
+          y: {
+            grid: { color: colors.border, drawTicks: false },
+            ticks: { 
+              color: colors.textMuted,
+              font: { family: 'Inter', size: 11 }
+            },
+            border: { display: false },
+            beginAtZero: true
+          }
+        }
+      };
+
       let charts = {};
-      const upsert = (id, cfg)=>{ if(!charts[id]) charts[id]=new Chart(document.querySelector(id), cfg); else { charts[id].data=cfg.data; charts[id].options=cfg.options; charts[id].update(); } };
 
-      async function load(){
-        const res = await fetch('/stats/install');
-        if(!res.ok){ document.getElementById('meta').textContent = 'Failed to load ('+res.status+')'; return; }
-  const s = await res.json();
-        document.getElementById('meta').textContent = `Window: ${s.from} → ${s.to} • Updated ${new Date().toLocaleTimeString()}`;
-        document.getElementById('installsTotal').textContent = (s.installsTotal||0).toLocaleString();
-
-  // Support monthly series from JSON store (fallback to daily if present)
-  const monthly = s.monthlyInstalls || { months: [], counts: [] };
-  const daily = s.dailyInstalls || null;
-  const labels = daily ? daily.dates : monthly.months;
-  const values = daily ? daily.counts : monthly.counts;
-  upsert('#dailyInstalls', { type:'line', data:{ labels, datasets:[{ label: 'Installs', data: values, borderColor:'#60a5fa', backgroundColor:'rgba(96,165,250,.2)', fill:true, tension:.25 }] }, options: common });
-
-        const byExt = s.byExt||{}; const extEnt = Object.entries(byExt).sort((a,b)=>b[1]-a[1]);
-        upsert('#extVersions', { type:'bar', data:{ labels: extEnt.map(e=>e[0]), datasets:[{ label:'Installs', data: extEnt.map(e=>e[1]), backgroundColor:'rgba(167,139,250,.35)', borderColor:'#a78bfa' }] }, options: common });
-
-        const byOs = s.byOs||{}; const osEnt = Object.entries(byOs).sort((a,b)=>b[1]-a[1]);
-        upsert('#osPie', { type:'doughnut', data:{ labels: osEnt.map(e=>e[0]), datasets:[{ data: osEnt.map(e=>e[1]) }] }, options:{ responsive:true, plugins:{ legend:{ labels:{ color:axisColor } } } } });
-
-        const tbody = document.querySelector('#countryTable tbody');
-        const byCountry = s.byCountry||{}; const countryEnt = Object.entries(byCountry).sort((a,b)=>b[1]-a[1]);
-        tbody.innerHTML = countryEnt.map(([k,v])=>`<tr><td>${k}</td><td>${v}</td></tr>`).join('');
+      function createOrUpdateChart(canvasId, config) {
+        const canvas = document.querySelector(canvasId);
+        if (!canvas) return;
+        
+        if (charts[canvasId]) {
+          charts[canvasId].destroy();
+        }
+        
+        charts[canvasId] = new Chart(canvas, config);
       }
 
-      load();
-      setInterval(load, 15000);
+      function formatNumber(num) {
+        return new Intl.NumberFormat().format(num);
+      }
+
+      function calculatePercentage(value, total) {
+        return total > 0 ? ((value / total) * 100).toFixed(1) : '0.0';
+      }
+
+      async function loadData() {
+        try {
+          const response = await fetch('/stats/install');
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+          
+          const data = await response.json();
+          updateDashboard(data);
+        } catch (error) {
+          console.error('Failed to load data:', error);
+          document.getElementById('datePeriod').textContent = 'Failed to load data';
+        }
+      }
+
+      function updateDashboard(data) {
+        const {
+          installsTotal = 0,
+          from = 'N/A',
+          to = 'N/A',
+          totalMonths = 0,
+          monthlyInstalls = { months: [], counts: [] },
+          byExt = {},
+          byOs = {},
+          byCountry = {},
+          updatedAt
+        } = data;
+
+        // Update header info
+        document.getElementById('datePeriod').textContent = 
+          from === to ? `${from}` : `${from} → ${to}`;
+        document.getElementById('lastUpdated').textContent = 
+          `Updated ${new Date().toLocaleTimeString()}`;
+
+        // Update stats
+        document.getElementById('totalInstalls').textContent = formatNumber(installsTotal);
+        document.getElementById('monthsCount').textContent = totalMonths;
+        document.getElementById('periodRange').textContent = 
+          `${totalMonths} month${totalMonths !== 1 ? 's' : ''} tracked`;
+
+        // Calculate growth trend info
+        const counts = monthlyInstalls.counts;
+        const months = monthlyInstalls.months;
+        let growthInfo = 'No growth data';
+        let growthValue = '+0';
+        
+        if (counts.length >= 2) {
+          const firstMonth = months[0];
+          const lastMonth = months[months.length - 1];
+          const firstValue = counts[0];
+          const lastValue = counts[counts.length - 1];
+          const totalGrowth = lastValue - firstValue;
+          const percentGrowth = firstValue > 0 ? ((totalGrowth / firstValue) * 100).toFixed(1) : 'N/A';
+          
+          if (totalGrowth > 0) {
+            growthValue = `+${formatNumber(totalGrowth)}`;
+            growthInfo = `From ${firstMonth} to ${lastMonth} (+${percentGrowth}%)`;
+          } else if (totalGrowth < 0) {
+            growthValue = formatNumber(totalGrowth);
+            growthInfo = `From ${firstMonth} to ${lastMonth} (${percentGrowth}%)`;
+          } else {
+            growthValue = '0';
+            growthInfo = `No change from ${firstMonth} to ${lastMonth}`;
+          }
+        }
+        
+        document.getElementById('growthValue').textContent = growthValue;
+        document.getElementById('growthInfo').textContent = growthInfo;
+
+        // Create trend chart (small sparkline)
+        // Removed - redundant with monthly chart
+
+        // Monthly installs chart
+        createOrUpdateChart('#monthlyChart', {
+          type: 'line',
+          data: {
+            labels: monthlyInstalls.months,
+            datasets: [{
+              label: 'Monthly Installs',
+              data: monthlyInstalls.counts,
+              borderColor: colors.primary,
+              backgroundColor: colors.primary + '15',
+              borderWidth: 2,
+              fill: true,
+              tension: 0.3,
+              pointRadius: 0,
+              pointHoverRadius: 4,
+              pointBackgroundColor: colors.primary,
+              pointBorderColor: colors.text,
+              pointBorderWidth: 1
+            }]
+          },
+          options: {
+            ...commonOptions,
+            interaction: { intersect: false, mode: 'index' },
+            plugins: {
+              ...commonOptions.plugins,
+              legend: { display: false }
+            }
+          }
+        });
+
+        // OS distribution - separate main platforms from architectures
+        const mainPlatforms = ['Windows', 'macOS', 'Linux'];
+        const osEntries = Object.entries(byOs);
+        const mainOs = osEntries.filter(([os]) => mainPlatforms.includes(os));
+        const archOs = osEntries.filter(([os]) => !mainPlatforms.includes(os));
+
+        createOrUpdateChart('#osChart', {
+          type: 'doughnut',
+          data: {
+            labels: mainOs.map(([os]) => os),
+            datasets: [{
+              data: mainOs.map(([, count]) => count),
+              backgroundColor: chartColors.slice(0, mainOs.length),
+              borderWidth: 3,
+              borderColor: '#334155',
+              hoverBorderWidth: 4
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                position: 'bottom',
+                labels: {
+                  color: colors.textSecondary,
+                  font: { family: 'Inter', size: 12 },
+                  usePointStyle: true,
+                  padding: 20
+                }
+              }
+            },
+            cutout: '60%'
+          }
+        });
+
+        // Architecture chart
+        createOrUpdateChart('#archChart', {
+          type: 'bar',
+          data: {
+            labels: archOs.slice(0, 8).map(([arch]) => arch),
+            datasets: [{
+              label: 'Installs',
+              data: archOs.slice(0, 8).map(([, count]) => count),
+              backgroundColor: chartColors[3] + '80',
+              borderColor: chartColors[3],
+              borderWidth: 2,
+              borderRadius: 6,
+              borderSkipped: false
+            }]
+          },
+          options: {
+            ...commonOptions,
+            plugins: {
+              ...commonOptions.plugins,
+              legend: { display: false }
+            },
+            scales: {
+              ...commonOptions.scales,
+              x: {
+                ...commonOptions.scales.x,
+                ticks: {
+                  ...commonOptions.scales.x.ticks,
+                  maxRotation: 45
+                }
+              }
+            }
+          }
+        });
+
+        // Extension versions chart
+        const extEntries = Object.entries(byExt)
+          .sort(([,a], [,b]) => b - a)
+          .slice(0, 15);
+
+        createOrUpdateChart('#versionsChart', {
+          type: 'bar',
+          data: {
+            labels: extEntries.map(([version]) => version),
+            datasets: [{
+              label: 'Installs',
+              data: extEntries.map(([, count]) => count),
+              backgroundColor: colors.secondary + '80',
+              borderColor: colors.secondary,
+              borderWidth: 2,
+              borderRadius: 6,
+              borderSkipped: false
+            }]
+          },
+          options: {
+            ...commonOptions,
+            plugins: {
+              ...commonOptions.plugins,
+              legend: { display: false }
+            },
+            scales: {
+              ...commonOptions.scales,
+              x: {
+                ...commonOptions.scales.x,
+                ticks: {
+                  ...commonOptions.scales.x.ticks,
+                  maxRotation: 45
+                }
+              }
+            }
+          }
+        });
+
+        // Country chart (top 10)
+        const countryEntries = Object.entries(byCountry)
+          .sort(([,a], [,b]) => b - a)
+          .slice(0, 10);
+
+        createOrUpdateChart('#countryChart', {
+          type: 'doughnut',
+          data: {
+            labels: countryEntries.map(([country]) => country),
+            datasets: [{
+              data: countryEntries.map(([, count]) => count),
+              backgroundColor: chartColors,
+              borderWidth: 3,
+              borderColor: '#334155',
+              hoverBorderWidth: 4
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                position: 'right',
+                labels: {
+                  color: colors.textSecondary,
+                  font: { family: 'Inter', size: 11 },
+                  usePointStyle: true,
+                  padding: 15
+                }
+              }
+            },
+            cutout: '50%'
+          }
+        });
+
+        // Country table
+        updateCountryTable(byCountry, installsTotal);
+      }
+
+      function updateCountryTable(byCountry, total) {
+        const tbody = document.getElementById('countryTable');
+        const entries = Object.entries(byCountry)
+          .sort(([,a], [,b]) => b - a)
+          .slice(0, 20);
+
+        tbody.innerHTML = entries.map(([country, count]) => `
+          <tr>
+            <td>
+              <span class="country-flag"></span>
+              ${country}
+            </td>
+            <td>${formatNumber(count)}</td>
+            <td>${calculatePercentage(count, total)}%</td>
+          </tr>
+        `).join('');
+      }
+
+      // Load data initially and set up refresh
+      loadData();
+      setInterval(loadData, 30000); // Refresh every 30 seconds
     </script>
   </body>
-  </html>
+</html>

@@ -9,6 +9,8 @@ type Store = {
   byExt: Record<string, number>;
   byOs: Record<string, number>;
   byCountry: Record<string, number>;
+  // NEW: Version installs by month for timeline analysis
+  versionsByMonth: Record<string /*YYYY-MM*/, Record<string /*version*/, number>>;
 };
 
 const FILE = CONFIG.STORE_FILE;
@@ -20,7 +22,14 @@ function ensureDirExists(filePath: string) {
 
 function defaultStore(): Store {
   const now = new Date().toISOString();
-  return { meta: { createdAt: now, updatedAt: now }, months: {}, byExt: {}, byOs: {}, byCountry: {} };
+  return { 
+    meta: { createdAt: now, updatedAt: now }, 
+    months: {}, 
+    byExt: {}, 
+    byOs: {}, 
+    byCountry: {},
+    versionsByMonth: {}
+  };
 }
 
 function readStore(): Store {
@@ -34,6 +43,7 @@ function readStore(): Store {
     obj.byExt = obj.byExt || {};
     obj.byOs = obj.byOs || {};
     obj.byCountry = obj.byCountry || {};
+    obj.versionsByMonth = obj.versionsByMonth || {};
     obj.meta = obj.meta || { createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
     return obj as Store;
   } catch {
@@ -93,6 +103,11 @@ export async function storeUpsertInstall(ev: any, geo?: { country?: string }) {
       // OS and country tallies (only for installs)
       store.byOs[os] = (store.byOs[os] || 0) + 1;
       store.byCountry[country] = (store.byCountry[country] || 0) + 1;
+
+      // NEW: Track version installs by month
+      const monthKey = `${y}-${m}`;
+      if (!store.versionsByMonth[monthKey]) store.versionsByMonth[monthKey] = {};
+      store.versionsByMonth[monthKey][ext] = (store.versionsByMonth[monthKey][ext] || 0) + 1;
     }
 
     store.meta.updatedAt = nowIso;
@@ -140,8 +155,42 @@ export function storeReadInstallStats(windowMonths = 12) {
     byExt: s.byExt,
     byOs: s.byOs,
     byCountry: s.byCountry,
+    versionTimeline: generateVersionTimeline(s),
     updatedAt: s.meta.updatedAt,
     file: FILE
+  };
+}
+
+function generateVersionTimeline(s: Store) {
+  // Get all months in chronological order
+  const allMonths: string[] = [];
+  const years = Object.keys(s.months).sort();
+  for (const y of years) {
+    const monthsInYear = Object.keys(s.months[y] || {}).sort();
+    for (const m of monthsInYear) {
+      allMonths.push(`${y}-${m}`);
+    }
+  }
+
+  // Get top versions (by total installs) to avoid chart clutter
+  const topVersions = Object.entries(s.byExt)
+    .sort(([,a], [,b]) => b - a)
+    .slice(0, 8) // Show top 8 versions
+    .map(([version]) => version);
+
+  // Build timeline data for each version
+  const versionData: Record<string, number[]> = {};
+  
+  for (const version of topVersions) {
+    versionData[version] = allMonths.map(month => 
+      s.versionsByMonth[month]?.[version] || 0
+    );
+  }
+
+  return {
+    months: allMonths,
+    versions: topVersions,
+    data: versionData
   };
 }
 
