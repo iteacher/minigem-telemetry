@@ -196,6 +196,11 @@
         min-height: 400px;
       }
 
+      /* Special spacing for Platform Trends chart */
+      #platformTrendsChart {
+        margin-top: 20px;
+      }
+
       .versions-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -1722,14 +1727,14 @@
                     legend: {
                       display: true,
                       position: 'top',
+                      align: 'center',
                       labels: {
                         color: '#9ca3af',
                         usePointStyle: true,
                         pointStyle: 'circle',
-                        padding: 20
-                      },
-                      margin: {
-                        bottom: 30
+                        padding: 20,
+                        boxWidth: 12,
+                        boxHeight: 12
                       }
                     },
                     tooltip: {
@@ -1993,6 +1998,16 @@
     <!-- Footer -->
     <footer style="margin-top: 3rem; padding: 2rem 0; border-top: 1px solid var(--border); background: rgba(15, 23, 42, 0.8);">
       <div style="max-width: 1200px; margin: 0 auto; padding: 0 1rem; text-align: center;">
+        <!-- Badge Links -->
+        <div style="display: flex; justify-content: center; align-items: center; gap: 0.75rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
+          <a href="https://opensource.org/licenses/MIT" target="_blank" style="display: inline-block;">
+            <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="MIT License" style="height: 20px; border-radius: 3px;">
+          </a>
+          <a href="https://github.com/iteacher/minigem-telemetry/blob/main/LICENSE" target="_blank" style="display: inline-block;">
+            <img src="https://img.shields.io/github/license/iteacher/minigem-telemetry" alt="GitHub License" style="height: 20px; border-radius: 3px;">
+          </a>
+        </div>
+        
         <div style="display: flex; justify-content: center; align-items: center; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap;">
           <div style="display: flex; align-items: center; gap: 0.5rem;">
             <span class="material-symbols-outlined" style="font-size: 1.2rem; color: var(--text-muted);">code</span>
