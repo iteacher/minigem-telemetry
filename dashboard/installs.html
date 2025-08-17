@@ -51,12 +51,16 @@
       async function load(){
         const res = await fetch('/stats/install');
         if(!res.ok){ document.getElementById('meta').textContent = 'Failed to load ('+res.status+')'; return; }
-        const s = await res.json();
+  const s = await res.json();
         document.getElementById('meta').textContent = `Window: ${s.from} → ${s.to} • Updated ${new Date().toLocaleTimeString()}`;
         document.getElementById('installsTotal').textContent = (s.installsTotal||0).toLocaleString();
 
-        const daily = s.dailyInstalls||{dates:[],counts:[]};
-        upsert('#dailyInstalls', { type:'line', data:{ labels: daily.dates, datasets:[{ label:'Installs', data: daily.counts, borderColor:'#60a5fa', backgroundColor:'rgba(96,165,250,.2)', fill:true, tension:.25 }] }, options: common });
+  // Support monthly series from JSON store (fallback to daily if present)
+  const monthly = s.monthlyInstalls || { months: [], counts: [] };
+  const daily = s.dailyInstalls || null;
+  const labels = daily ? daily.dates : monthly.months;
+  const values = daily ? daily.counts : monthly.counts;
+  upsert('#dailyInstalls', { type:'line', data:{ labels, datasets:[{ label: 'Installs', data: values, borderColor:'#60a5fa', backgroundColor:'rgba(96,165,250,.2)', fill:true, tension:.25 }] }, options: common });
 
         const byExt = s.byExt||{}; const extEnt = Object.entries(byExt).sort((a,b)=>b[1]-a[1]);
         upsert('#extVersions', { type:'bar', data:{ labels: extEnt.map(e=>e[0]), datasets:[{ label:'Installs', data: extEnt.map(e=>e[1]), backgroundColor:'rgba(167,139,250,.35)', borderColor:'#a78bfa' }] }, options: common });

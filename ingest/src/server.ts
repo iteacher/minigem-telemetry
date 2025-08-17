@@ -3,8 +3,8 @@ import rateLimit from '@fastify/rate-limit';
 import { CONFIG } from './config.js';
 import { validateEnvelope, validateEvent, normalizeEvent } from './validate.js';
 import { initGeo, lookup } from './geo.js';
-import { dbEnabled, dbInit, dbInsertEvent, dbReadStats, dbHealth, dbRecent, dbCounts, dbUpsertInstallCounters, dbReadInstallStats } from './db.js';
 import { log } from './logger.js';
+import { upsertFromEvent, readStatsMonthly, pathToStore } from './store.js';
 
 function h(req: FastifyRequest, name: string): string | undefined {
   const v = req.headers[name.toLowerCase()];
@@ -61,8 +61,7 @@ async function main() {
   app.addHook('onResponse', async (req, reply) => { log.info('res', { method: req.method, url: req.url, status: reply.statusCode }); });
   log.info('boot.start', { port: CONFIG.PORT });
   await initGeo();
-  await dbInit();
-  log.info('boot.dbInit.done', { enabled: dbEnabled() });
+  log.info('boot.store.ready', { file: pathToStore() });
 
   log.info('boot.register.rateLimit.start');
   await app.register(rateLimit, { max: CONFIG.RATE_LIMIT_MAX, timeWindow: CONFIG.RATE_LIMIT_TIME_WINDOW });
@@ -70,7 +69,7 @@ async function main() {
 
   app.get('/health', async () => ({ ok: true, ts: Date.now() }));
 
-  app.get('/dbhealth', async () => { try { return await dbHealth(); } catch (e) { return { enabled: dbEnabled(), error: String(e) }; } });
+  app.get('/dbhealth', async () => ({ enabled: false, ok: false, note: 'DB removed; using JSON store', file: pathToStore() }));
 
   // Debug: write to log file and return path
   app.get('/debug/logping', async () => {
@@ -99,87 +98,19 @@ async function main() {
     };
   });
 
-  app.get('/debug/recent', async (req, reply) => {
-    if (CONFIG.STATS_SECRET) {
-      const key = (req.headers['x-stats-key'] as string) || (req.query as any)?.key;
-      if (key !== CONFIG.STATS_SECRET) return reply.code(401).send({ error: 'unauthorized' });
-    }
-    const lim = Number((req.query as any)?.limit||50);
-    return { rows: await dbRecent(lim) };
-  });
+  app.get('/debug/recent', async (_req, _reply) => ({ note: 'Not available without DB' }));
 
-  app.get('/debug/counts', async (req, reply) => {
-    if (CONFIG.STATS_SECRET) {
-      const key = (req.headers['x-stats-key'] as string) || (req.query as any)?.key;
-      if (key !== CONFIG.STATS_SECRET) return reply.code(401).send({ error: 'unauthorized' });
-    }
-    const hrs = Number((req.query as any)?.hours||24);
-    return await dbCounts(hrs);
-  });
+  app.get('/debug/counts', async (_req, _reply) => ({ note: 'Not available without DB' }));
 
-  app.get('/stats', async (req: FastifyRequest, reply: FastifyReply) => {
-    try {
-      // Public stats endpoint: DB is the single source of truth.
-      if (!dbEnabled()) {
-        return reply.code(503).send({ error: 'db_disabled', message: 'Database not configured. Stats require DB-only mode.' });
-      }
-      const q: any = (req as any).query || {};
-      const from = typeof q.from === 'string' ? q.from : undefined;
-      const to = typeof q.to === 'string' ? q.to : undefined;
-      const data = await dbReadStats(CONFIG.STATS_WINDOW_DAYS, from, to);
-      if (CONFIG.DEBUG_STATS_TRACE && q.debug === '1') {
-        log.info('stats.trace', { from, to, trace: (data as any)?._trace });
-      }
-      if (data) return data; // DB-backed stats
-      return reply.code(204).send();
-    } catch (e) {
-      (req as any).log?.error?.(e);
-      const today = new Date().toISOString().slice(0,10);
-      return {
-        from: today,
-        to: today,
-        windowDays: CONFIG.STATS_WINDOW_DAYS,
-        total: 0,
-        uniques: 0,
-        osTypes: 0,
-        extTypes: 0,
-        vscodeTypes: 0,
-        daily: { dates: [], hits: [], uniques: [] },
-        dailyOs: { labels: [], series: [] },
-        byEvent: {}, byOs: {}, byExt: {}, byVscode: {},
-        hourly: new Array(24).fill(0),
-        hourlyVisitors: new Array(24).fill(0),
-        dow: new Array(7).fill(0),
-        runs: { started: 0, completed: 0 },
-        errors: { compile: 0, runtime: 0, compileRate: 0, runtimeRate: 0 },
-        durations: { count: 0, median: 0, p90: 0, hist: { labels: [], values: [] }, avgWaitMs: 0 },
-        exitCodes: {}, outputBuckets: {},
-        interactiveRate: 0, truncationRate: 0, topExceptions: {},
-        geo: { byContinent: {}, byCountry: {} },
-        tables: { eventsTop: [], extTop: [], vscodeTop: [], exitTop: [], exceptionsTop: [] }
-      } as any;
-    }
-  });
+  app.get('/stats', async (_req: FastifyRequest, reply: FastifyReply) => reply.code(410).send({ error: 'gone', note: 'Use /stats/install (JSON store)' }));
 
   // Minimal installs-only stats for simplified dashboard
-  app.get('/stats/install', async (req: FastifyRequest, reply: FastifyReply) => {
-    try {
-      if (!dbEnabled()) return reply.code(503).send({ error: 'db_disabled' });
-      const data = await dbReadInstallStats(CONFIG.STATS_WINDOW_DAYS);
-      if (!data) return reply.code(204).send();
-      return data;
-    } catch (e) {
-      log.error('stats.install.error', { err: String(e) });
-      return reply.code(500).send({ error: 'server_error' });
-    }
+  app.get('/stats/install', async (_req: FastifyRequest, reply: FastifyReply) => {
+    try { return readStatsMonthly(); } catch (e) { log.error('stats.install.error', { err: String(e) }); return reply.code(500).send({ error: 'server_error' }); }
   });
 
   app.post('/t', async (req: FastifyRequest, reply: FastifyReply) => {
     try {
-      // Ingest requires DB; no file fallbacks.
-      if (!dbEnabled()) {
-        return reply.code(503).send({ error: 'db_disabled', message: 'Database not configured. Ingestion requires DB-only mode.' });
-      }
       const raw: any = (req as any).body;
       const schema = typeof raw?.schema === 'string' ? raw.schema.trim().toLowerCase() : '';
       if (schema !== 'jwc.v1') {
@@ -196,10 +127,7 @@ async function main() {
         const ev = normalizeEvent(evRaw);
         if (!ev || !validateEvent(ev)) { skipped++; log.warn('event skipped: invalid', { evRaw }); continue; }
         try {
-          // Always write raw event for audit if desired in future
-          await dbInsertEvent(ev, geo);
-          // Update counters for installs-only model
-          await dbUpsertInstallCounters(ev, geo);
+          await upsertFromEvent(ev, geo);
           accepted++;
           log.info('ingest: inserted', { ev, geo });
         }
