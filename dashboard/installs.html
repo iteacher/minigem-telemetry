@@ -340,7 +340,7 @@
         
         <div class="stat-card">
           <div class="stat-header">
-            <div class="stat-title">Growth Summary</div>
+            <div class="stat-title">Monthly Growth</div>
             <div class="stat-icon" style="background: var(--accent-green); color: white;">trending_up</div>
           </div>
           <div class="stat-value" id="growthValue">+0</div>
@@ -606,29 +606,62 @@
         document.getElementById('periodRange').textContent = 
           `${totalMonths} month${totalMonths !== 1 ? 's' : ''} tracked`;
 
-        // Calculate growth trend info
+        // Calculate meaningful growth metrics
         const counts = monthlyInstalls.counts;
         const months = monthlyInstalls.months;
         let growthInfo = 'No growth data';
-        let growthValue = '+0';
+        let growthValue = 'N/A';
         
         if (counts.length >= 2) {
-          const firstMonth = months[0];
-          const lastMonth = months[months.length - 1];
-          const firstValue = counts[0];
-          const lastValue = counts[counts.length - 1];
-          const totalGrowth = lastValue - firstValue;
-          const percentGrowth = firstValue > 0 ? ((totalGrowth / firstValue) * 100).toFixed(1) : 'N/A';
+          const currentValue = counts[counts.length - 1];
+          const previousValue = counts[counts.length - 2];
           
-          if (totalGrowth > 0) {
-            growthValue = `+${formatNumber(totalGrowth)}`;
-            growthInfo = `From ${firstMonth} to ${lastMonth} (+${percentGrowth}%)`;
-          } else if (totalGrowth < 0) {
-            growthValue = formatNumber(totalGrowth);
-            growthInfo = `From ${firstMonth} to ${lastMonth} (${percentGrowth}%)`;
+          // Month-over-Month Growth
+          const momGrowth = previousValue > 0 ? ((currentValue - previousValue) / previousValue * 100) : 0;
+          const momAbsolute = currentValue - previousValue;
+          
+          // 3-Month Moving Average Growth (if we have enough data)
+          let threeMonthTrend = 'N/A';
+          if (counts.length >= 4) {
+            const last3Months = counts.slice(-3);
+            const prev3Months = counts.slice(-6, -3);
+            const avg3Current = last3Months.reduce((a, b) => a + b, 0) / 3;
+            const avg3Previous = prev3Months.reduce((a, b) => a + b, 0) / 3;
+            const threeMonthGrowthRate = avg3Previous > 0 ? ((avg3Current - avg3Previous) / avg3Previous * 100) : 0;
+            threeMonthTrend = threeMonthGrowthRate >= 0 ? `+${threeMonthGrowthRate.toFixed(1)}%` : `${threeMonthGrowthRate.toFixed(1)}%`;
+          }
+          
+          // Growth Velocity (is growth accelerating?)
+          let velocity = 'Stable';
+          if (counts.length >= 3) {
+            const thisMonthGrowth = previousValue > 0 ? ((currentValue - previousValue) / previousValue) : 0;
+            const lastMonthGrowth = counts[counts.length - 3] > 0 ? ((previousValue - counts[counts.length - 3]) / counts[counts.length - 3]) : 0;
+            if (thisMonthGrowth > lastMonthGrowth * 1.1) velocity = 'Accelerating';
+            else if (thisMonthGrowth < lastMonthGrowth * 0.9) velocity = 'Decelerating';
+          }
+          
+          // Year-over-Year Growth (if we have 12+ months of data)
+          let yoyGrowth = 'N/A';
+          if (counts.length >= 12) {
+            const yearAgoValue = counts[counts.length - 13] || 0;
+            if (yearAgoValue > 0) {
+              const yoyRate = ((currentValue - yearAgoValue) / yearAgoValue * 100);
+              yoyGrowth = yoyRate >= 0 ? `+${yoyRate.toFixed(1)}%` : `${yoyRate.toFixed(1)}%`;
+            }
+          }
+          
+          // Format the main display
+          if (momGrowth >= 0) {
+            growthValue = `+${momGrowth.toFixed(1)}%`;
+            growthInfo = `${momAbsolute >= 0 ? '+' : ''}${momAbsolute} vs last month • 3M: ${threeMonthTrend} • ${velocity}`;
           } else {
-            growthValue = '0';
-            growthInfo = `No change from ${firstMonth} to ${lastMonth}`;
+            growthValue = `${momGrowth.toFixed(1)}%`;
+            growthInfo = `${momAbsolute} vs last month • 3M: ${threeMonthTrend} • ${velocity}`;
+          }
+          
+          // Add YoY if available
+          if (yoyGrowth !== 'N/A') {
+            growthInfo += ` • YoY: ${yoyGrowth}`;
           }
         }
         
