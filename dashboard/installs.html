@@ -395,6 +395,30 @@
         </div>
       </div>
 
+      <div class="chart-card" style="margin-bottom: 2.5rem;">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">OS Platform Timeline</div>
+            <div class="chart-subtitle">Operating system adoption trends over time</div>
+          </div>
+        </div>
+        <div class="chart-container large">
+          <canvas id="osTimelineChart"></canvas>
+        </div>
+      </div>
+
+      <div class="chart-card" style="margin-bottom: 2.5rem;">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">Geographic Distribution Timeline</div>
+            <div class="chart-subtitle">Regional install patterns and growth trends</div>
+          </div>
+        </div>
+        <div class="chart-container large">
+          <canvas id="geoTimelineChart"></canvas>
+        </div>
+      </div>
+
       <div class="versions-grid">
         <div class="chart-card">
           <div class="chart-header">
@@ -885,6 +909,315 @@
                   ...commonOptions.plugins.tooltip,
                   callbacks: {
                     afterTitle: () => '(Simulated data - install telemetry to track actual version adoption over time)'
+                  }
+                }
+              },
+              scales: {
+                ...commonOptions.scales,
+                y: {
+                  ...commonOptions.scales.y,
+                  title: {
+                    display: true,
+                    text: 'Monthly Installs (Simulated)',
+                    color: colors.textMuted,
+                    font: { family: 'Inter', size: 12 }
+                  }
+                },
+                x: {
+                  ...commonOptions.scales.x,
+                  title: {
+                    display: true,
+                    text: 'Timeline',
+                    color: colors.textMuted,
+                    font: { family: 'Inter', size: 12 }
+                  }
+                }
+              },
+              interaction: { intersect: false, mode: 'index' }
+            }
+          });
+        }
+
+        // OS Timeline Chart - NEW
+        if (data.osTimeline && data.osTimeline.months && data.osTimeline.months.length > 0) {
+          const osTimeline = data.osTimeline;
+          const months = osTimeline.months || [];
+          const osTypes = osTimeline.osTypes || [];
+          const osTimelineData = osTimeline.data || {};
+          
+          const osDatasets = osTypes.map((osType, index) => ({
+            label: osType,
+            data: osTimelineData[osType] || [],
+            borderColor: chartColors[index % chartColors.length],
+            backgroundColor: chartColors[index % chartColors.length] + '20',
+            borderWidth: 2,
+            fill: false,
+            tension: 0.3,
+            pointRadius: 2,
+            pointHoverRadius: 4
+          }));
+
+          createOrUpdateChart('#osTimelineChart', {
+            type: 'line',
+            data: {
+              labels: months,
+              datasets: osDatasets
+            },
+            options: {
+              ...commonOptions,
+              plugins: {
+                ...commonOptions.plugins,
+                legend: {
+                  display: true,
+                  position: 'top',
+                  labels: {
+                    color: colors.textSecondary,
+                    font: { family: 'Inter', size: 11 },
+                    usePointStyle: true,
+                    padding: 15
+                  }
+                }
+              },
+              scales: {
+                ...commonOptions.scales,
+                y: {
+                  ...commonOptions.scales.y,
+                  title: {
+                    display: true,
+                    text: 'Monthly Installs',
+                    color: colors.textMuted,
+                    font: { family: 'Inter', size: 12 }
+                  }
+                },
+                x: {
+                  ...commonOptions.scales.x,
+                  title: {
+                    display: true,
+                    text: 'Timeline',
+                    color: colors.textMuted,
+                    font: { family: 'Inter', size: 12 }
+                  }
+                }
+              },
+              interaction: { intersect: false, mode: 'index' }
+            }
+          });
+        } else {
+          // Fallback: Create simulated OS timeline from available data
+          const months = monthlyInstalls.months || [];
+          const osEntries = Object.entries(byOs).sort(([,a], [,b]) => b - a);
+          
+          const osDatasets = osEntries.map(([osType, totalCount], index) => {
+            // Simulate OS adoption patterns - more stable than versions
+            const simulatedData = months.map((month, monthIndex) => {
+              const progress = monthIndex / months.length;
+              const baseValue = totalCount / months.length;
+              const seasonalVariation = Math.sin(monthIndex * 0.5) * 0.2 + 1;
+              const growthTrend = osType === 'win32' ? 1 + progress * 0.3 : 
+                                 osType === 'darwin' ? 1 + progress * 0.5 : 
+                                 1 + progress * 0.1;
+              return Math.floor(baseValue * seasonalVariation * growthTrend * (Math.random() * 0.3 + 0.85));
+            });
+
+            return {
+              label: osType,
+              data: simulatedData,
+              borderColor: chartColors[index % chartColors.length],
+              backgroundColor: chartColors[index % chartColors.length] + '20',
+              borderWidth: 2,
+              fill: false,
+              tension: 0.3,
+              pointRadius: 2,
+              pointHoverRadius: 4
+            };
+          });
+
+          createOrUpdateChart('#osTimelineChart', {
+            type: 'line',
+            data: {
+              labels: months,
+              datasets: osDatasets
+            },
+            options: {
+              ...commonOptions,
+              plugins: {
+                ...commonOptions.plugins,
+                legend: {
+                  display: true,
+                  position: 'top',
+                  labels: {
+                    color: colors.textSecondary,
+                    font: { family: 'Inter', size: 11 },
+                    usePointStyle: true,
+                    padding: 15
+                  }
+                },
+                tooltip: {
+                  ...commonOptions.plugins.tooltip,
+                  callbacks: {
+                    afterTitle: () => '(Simulated data - install telemetry to track actual OS adoption over time)'
+                  }
+                }
+              },
+              scales: {
+                ...commonOptions.scales,
+                y: {
+                  ...commonOptions.scales.y,
+                  title: {
+                    display: true,
+                    text: 'Monthly Installs (Simulated)',
+                    color: colors.textMuted,
+                    font: { family: 'Inter', size: 12 }
+                  }
+                },
+                x: {
+                  ...commonOptions.scales.x,
+                  title: {
+                    display: true,
+                    text: 'Timeline',
+                    color: colors.textMuted,
+                    font: { family: 'Inter', size: 12 }
+                  }
+                }
+              },
+              interaction: { intersect: false, mode: 'index' }
+            }
+          });
+        }
+
+        // Geographic Timeline Chart - NEW
+        if (data.geoTimeline && data.geoTimeline.months && data.geoTimeline.months.length > 0) {
+          const geoTimeline = data.geoTimeline;
+          const months = geoTimeline.months || [];
+          const countries = geoTimeline.countries || [];
+          const geoTimelineData = geoTimeline.data || {};
+          
+          const geoDatasets = countries.map((country, index) => ({
+            label: country,
+            data: geoTimelineData[country] || [],
+            borderColor: chartColors[index % chartColors.length],
+            backgroundColor: chartColors[index % chartColors.length] + '20',
+            borderWidth: 2,
+            fill: false,
+            tension: 0.3,
+            pointRadius: 2,
+            pointHoverRadius: 4
+          }));
+
+          createOrUpdateChart('#geoTimelineChart', {
+            type: 'line',
+            data: {
+              labels: months,
+              datasets: geoDatasets
+            },
+            options: {
+              ...commonOptions,
+              plugins: {
+                ...commonOptions.plugins,
+                legend: {
+                  display: true,
+                  position: 'top',
+                  labels: {
+                    color: colors.textSecondary,
+                    font: { family: 'Inter', size: 11 },
+                    usePointStyle: true,
+                    padding: 15
+                  }
+                }
+              },
+              scales: {
+                ...commonOptions.scales,
+                y: {
+                  ...commonOptions.scales.y,
+                  title: {
+                    display: true,
+                    text: 'Monthly Installs',
+                    color: colors.textMuted,
+                    font: { family: 'Inter', size: 12 }
+                  }
+                },
+                x: {
+                  ...commonOptions.scales.x,
+                  title: {
+                    display: true,
+                    text: 'Timeline',
+                    color: colors.textMuted,
+                    font: { family: 'Inter', size: 12 }
+                  }
+                }
+              },
+              interaction: { intersect: false, mode: 'index' }
+            }
+          });
+        } else {
+          // Fallback: Create simulated geographic timeline from available data
+          const months = monthlyInstalls.months || [];
+          const topCountries = Object.entries(byCountry)
+            .sort(([,a], [,b]) => b - a)
+            .slice(0, 8) // Show top 8 countries
+            .map(([country]) => country);
+          
+          const geoDatasets = topCountries.map((country, index) => {
+            const totalCount = byCountry[country] || 0;
+            
+            // Simulate geographic adoption patterns with realistic trends
+            const simulatedData = months.map((month, monthIndex) => {
+              const progress = monthIndex / months.length;
+              const baseValue = totalCount / months.length;
+              
+              // Different growth patterns by region
+              let growthPattern = 1;
+              if (['US', 'USA', 'UNITED STATES'].includes(country.toUpperCase())) {
+                growthPattern = 1 + progress * 0.4; // Steady growth
+              } else if (['CN', 'CHINA', 'IN', 'INDIA'].includes(country.toUpperCase())) {
+                growthPattern = 1 + progress * 0.8; // Rapid growth
+              } else if (['DE', 'GERMANY', 'FR', 'FRANCE', 'GB', 'UK'].includes(country.toUpperCase())) {
+                growthPattern = 1 + progress * 0.3; // Moderate growth
+              } else {
+                growthPattern = 1 + progress * 0.2; // Slow growth
+              }
+              
+              const seasonalVariation = Math.sin(monthIndex * 0.4) * 0.15 + 1;
+              return Math.floor(baseValue * growthPattern * seasonalVariation * (Math.random() * 0.3 + 0.85));
+            });
+
+            return {
+              label: country,
+              data: simulatedData,
+              borderColor: chartColors[index % chartColors.length],
+              backgroundColor: chartColors[index % chartColors.length] + '20',
+              borderWidth: 2,
+              fill: false,
+              tension: 0.3,
+              pointRadius: 2,
+              pointHoverRadius: 4
+            };
+          });
+
+          createOrUpdateChart('#geoTimelineChart', {
+            type: 'line',
+            data: {
+              labels: months,
+              datasets: geoDatasets
+            },
+            options: {
+              ...commonOptions,
+              plugins: {
+                ...commonOptions.plugins,
+                legend: {
+                  display: true,
+                  position: 'top',
+                  labels: {
+                    color: colors.textSecondary,
+                    font: { family: 'Inter', size: 11 },
+                    usePointStyle: true,
+                    padding: 15
+                  }
+                },
+                tooltip: {
+                  ...commonOptions.plugins.tooltip,
+                  callbacks: {
+                    afterTitle: () => '(Simulated data - install telemetry to track actual geographic adoption over time)'
                   }
                 }
               },
