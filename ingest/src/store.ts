@@ -102,27 +102,35 @@ export async function storeUpsertInstall(ev: any, geo?: { country?: string }) {
 
 export function storeReadInstallStats(windowMonths = 12) {
   const s = readStore();
-  // Build ordered monthly series from Aug 2025 onward
-  const months: string[] = [];
-  const counts: number[] = [];
+  
+  // Calculate total installs across ALL time periods
+  let installsTotal = 0;
   const years = Object.keys(s.months).sort();
   for (const y of years) {
     const monthsInYear = Object.keys(s.months[y] || {}).sort();
     for (const m of monthsInYear) {
+      installsTotal += Number(s.months[y][m]?.installs || 0);
+    }
+  }
+  
+  // Build ordered monthly series from Aug 2025 onward for the chart
+  const months: string[] = [];
+  const counts: number[] = [];
+  for (const y of years) {
+    const monthsInYear = Object.keys(s.months[y] || {}).sort();
+    for (const m of monthsInYear) {
       const ym = `${y}-${m}`;
-      if (ym < '2025-08') continue; // Only track from Aug 2025 onwards
+      if (ym < '2025-08') continue; // Only show from Aug 2025 onwards in chart
       months.push(ym);
       counts.push(Number(s.months[y][m]?.installs || 0));
     }
   }
 
-  // Window the last N months
+  // Window the last N months for the chart
   const end = months.length;
   const start = Math.max(0, end - windowMonths);
   const winMonths = months.slice(start, end);
   const winCounts = counts.slice(start, end);
-
-  const installsTotal = counts.reduce((a, b) => a + b, 0);
   return {
     from: winMonths[0] || new Date().toISOString().slice(0, 7),
     to: winMonths[winMonths.length - 1] || new Date().toISOString().slice(0, 7),
