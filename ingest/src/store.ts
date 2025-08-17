@@ -11,6 +11,8 @@ type Store = {
   byCountry: Record<string, number>;
   // NEW: Version installs by month for timeline analysis
   versionsByMonth: Record<string /*YYYY-MM*/, Record<string /*version*/, number>>;
+  // NEW: OS installs by month for timeline analysis
+  osByMonth: Record<string /*YYYY-MM*/, Record<string /*os*/, number>>;
 };
 
 const FILE = CONFIG.STORE_FILE;
@@ -22,13 +24,14 @@ function ensureDirExists(filePath: string) {
 
 function defaultStore(): Store {
   const now = new Date().toISOString();
-  return { 
-    meta: { createdAt: now, updatedAt: now }, 
-    months: {}, 
-    byExt: {}, 
-    byOs: {}, 
+  return {
+    meta: { createdAt: now, updatedAt: now },
+    months: {},
+    byExt: {},
+    byOs: {},
     byCountry: {},
-    versionsByMonth: {}
+    versionsByMonth: {},
+    osByMonth: {}
   };
 }
 
@@ -108,6 +111,10 @@ export async function storeUpsertInstall(ev: any, geo?: { country?: string }) {
       const monthKey = `${y}-${m}`;
       if (!store.versionsByMonth[monthKey]) store.versionsByMonth[monthKey] = {};
       store.versionsByMonth[monthKey][ext] = (store.versionsByMonth[monthKey][ext] || 0) + 1;
+
+      // NEW: Track OS installs by month
+      if (!store.osByMonth[monthKey]) store.osByMonth[monthKey] = {};
+      store.osByMonth[monthKey][os] = (store.osByMonth[monthKey][os] || 0) + 1;
     }
 
     store.meta.updatedAt = nowIso;
@@ -156,6 +163,7 @@ export function storeReadInstallStats(windowMonths = 12) {
     byOs: s.byOs,
     byCountry: s.byCountry,
     versionTimeline: generateVersionTimeline(s),
+    osTimeline: generateOsTimeline(s),
     updatedAt: s.meta.updatedAt,
     file: FILE
   };
@@ -191,6 +199,36 @@ function generateVersionTimeline(s: Store) {
     months: allMonths,
     versions: topVersions,
     data: versionData
+  };
+}
+
+function generateOsTimeline(s: Store) {
+  // Get all months in chronological order
+  const allMonths: string[] = [];
+  const years = Object.keys(s.months).sort();
+  for (const y of years) {
+    const monthsInYear = Object.keys(s.months[y] || {}).sort();
+    for (const m of monthsInYear) {
+      allMonths.push(`${y}-${m}`);
+    }
+  }
+
+  // Get all OS types (likely to be manageable number)
+  const allOsTypes = Object.keys(s.byOs).sort();
+
+  // Build timeline data for each OS
+  const osData: Record<string, number[]> = {};
+  
+  for (const osType of allOsTypes) {
+    osData[osType] = allMonths.map(month => 
+      s.osByMonth[month]?.[osType] || 0
+    );
+  }
+
+  return {
+    months: allMonths,
+    osTypes: allOsTypes,
+    data: osData
   };
 }
 

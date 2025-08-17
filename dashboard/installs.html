@@ -752,6 +752,168 @@
           }
         });
 
+        // Version Timeline Chart - NEW
+        if (data.versionTimeline && data.versionTimeline.months && data.versionTimeline.months.length > 0) {
+          const timeline = data.versionTimeline;
+          const months = timeline.months || [];
+          const versions = timeline.versions || [];
+          const timelineData = timeline.data || {};
+          
+          const datasets = versions.map((version, index) => ({
+            label: version,
+            data: timelineData[version] || [],
+            borderColor: chartColors[index % chartColors.length],
+            backgroundColor: chartColors[index % chartColors.length] + '20',
+            borderWidth: 2,
+            fill: false,
+            tension: 0.3,
+            pointRadius: 2,
+            pointHoverRadius: 4
+          }));
+
+          createOrUpdateChart('#versionTimelineChart', {
+            type: 'line',
+            data: {
+              labels: months,
+              datasets: datasets
+            },
+            options: {
+              ...commonOptions,
+              plugins: {
+                ...commonOptions.plugins,
+                legend: {
+                  display: true,
+                  position: 'top',
+                  labels: {
+                    color: colors.textSecondary,
+                    font: { family: 'Inter', size: 11 },
+                    usePointStyle: true,
+                    padding: 15
+                  }
+                }
+              },
+              scales: {
+                ...commonOptions.scales,
+                y: {
+                  ...commonOptions.scales.y,
+                  title: {
+                    display: true,
+                    text: 'Monthly Installs',
+                    color: colors.textMuted,
+                    font: { family: 'Inter', size: 12 }
+                  }
+                },
+                x: {
+                  ...commonOptions.scales.x,
+                  title: {
+                    display: true,
+                    text: 'Timeline',
+                    color: colors.textMuted,
+                    font: { family: 'Inter', size: 12 }
+                  }
+                }
+              },
+              interaction: { intersect: false, mode: 'index' }
+            }
+          });
+        } else {
+          // Fallback: Create simulated timeline from available data
+          const months = monthlyInstalls.months || [];
+          const topVersions = Object.entries(byExt)
+            .sort(([,a], [,b]) => b - a)
+            .slice(0, 6)
+            .map(([version]) => version);
+
+          // Simulate version adoption patterns
+          const datasets = topVersions.map((version, index) => {
+            const versionNumber = parseFloat(version.replace(/[^\d.]/g, ''));
+            const isOlder = versionNumber < 2.0;
+            const isMajor = version.includes('.0.0') || version.includes('.0');
+            
+            const simulatedData = months.map((month, monthIndex) => {
+              const monthsFromStart = monthIndex;
+              const totalMonths = months.length;
+              
+              if (isOlder) {
+                // Older versions: high early, declining
+                return Math.max(0, Math.floor((byExt[version] || 0) * (1 - monthsFromStart / totalMonths) * (Math.random() * 0.4 + 0.8)));
+              } else if (isMajor) {
+                // Major versions: gradual adoption
+                return Math.floor((byExt[version] || 0) * (monthsFromStart / totalMonths) * (Math.random() * 0.3 + 0.85));
+              } else {
+                // Minor versions: quick peak then decline
+                const peakMonth = Math.floor(totalMonths * 0.7);
+                const distance = Math.abs(monthsFromStart - peakMonth);
+                return Math.floor((byExt[version] || 0) * Math.exp(-distance / 10) * (Math.random() * 0.2 + 0.9));
+              }
+            });
+
+            return {
+              label: version,
+              data: simulatedData,
+              borderColor: chartColors[index % chartColors.length],
+              backgroundColor: chartColors[index % chartColors.length] + '20',
+              borderWidth: 2,
+              fill: false,
+              tension: 0.3,
+              pointRadius: 2,
+              pointHoverRadius: 4
+            };
+          });
+
+          createOrUpdateChart('#versionTimelineChart', {
+            type: 'line',
+            data: {
+              labels: months,
+              datasets: datasets
+            },
+            options: {
+              ...commonOptions,
+              plugins: {
+                ...commonOptions.plugins,
+                legend: {
+                  display: true,
+                  position: 'top',
+                  labels: {
+                    color: colors.textSecondary,
+                    font: { family: 'Inter', size: 11 },
+                    usePointStyle: true,
+                    padding: 15
+                  }
+                },
+                tooltip: {
+                  ...commonOptions.plugins.tooltip,
+                  callbacks: {
+                    afterTitle: () => '(Simulated data - install telemetry to track actual version adoption over time)'
+                  }
+                }
+              },
+              scales: {
+                ...commonOptions.scales,
+                y: {
+                  ...commonOptions.scales.y,
+                  title: {
+                    display: true,
+                    text: 'Monthly Installs (Simulated)',
+                    color: colors.textMuted,
+                    font: { family: 'Inter', size: 12 }
+                  }
+                },
+                x: {
+                  ...commonOptions.scales.x,
+                  title: {
+                    display: true,
+                    text: 'Timeline',
+                    color: colors.textMuted,
+                    font: { family: 'Inter', size: 12 }
+                  }
+                }
+              },
+              interaction: { intersect: false, mode: 'index' }
+            }
+          });
+        }
+
         // Country chart (top 10)
         const countryEntries = Object.entries(byCountry)
           .sort(([,a], [,b]) => b - a)
