@@ -3,15 +3,15 @@
 [![MIT License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![GitHub](https://img.shields.io/github/license/iteacher/minigem-telemetry)](https://github.com/iteacher/minigem-telemetry/blob/main/LICENSE)
 
-A privacy-focused, lightweight telemetry system for tracking Java Web Console extension installations and usage patterns. Built with TypeScript/Node.js and designed for minimal resource usage while providing rich analytics insights.
+A privacy-focused, lightweight telemetry system for tracking application installations and usage patterns. Built with TypeScript/Node.js and designed for minimal resource usage while providing rich analytics insights for any application or service.
 
 ## Overview
 
-This system collects installation telemetry from the Java Web Console VS Code extension and provides a comprehensive analytics dashboard. The design prioritizes privacy (anonymous user tracking), performance (JSON file storage), and ease of deployment (single Node.js service with static dashboard).
+This system collects installation and usage telemetry from any application and provides a comprehensive analytics dashboard. The design prioritizes privacy (anonymous user tracking), performance (JSON file storage), and ease of deployment (single Node.js service with static dashboard).
 
 ## Architecture
 
-- **Ingestion Server**: FastAPI-based TypeScript service with rate limiting and validation
+- **Ingestion Server**: Fastify-based TypeScript service with rate limiting and validation
 - **Storage**: JSON file-based storage for minimal overhead and easy backup
 - **Analytics Dashboard**: Professional web interface with Chart.js visualizations
 - **Geographic Data**: Optional MaxMind GeoLite2 integration for location insights
@@ -28,7 +28,7 @@ This system collects installation telemetry from the Java Web Console VS Code ex
 
 ### 📊 **Analytics Dashboard**
 - **Installation Metrics**: Total installs, monthly trends, geographic distribution
-- **Version Analytics**: Extension version adoption patterns and lifecycle analysis
+- **Version Analytics**: Application version adoption patterns and lifecycle analysis
 - **Platform Intelligence**: Operating system breakdown and market share analysis
 - **Advanced Insights**: Seasonal patterns, growth trajectory analysis, version migration tracking
 - **Real-time Visualization**: Interactive Chart.js charts with professional Material Design UI
@@ -110,7 +110,7 @@ The server starts on the configured port (default: 3000) and logs startup inform
 
 #### `POST /t` - Telemetry Ingestion
 
-Primary endpoint for receiving telemetry data from extensions.
+Primary endpoint for receiving telemetry data from any application or service.
 
 **Single Event:**
 ```bash
@@ -149,21 +149,21 @@ curl -X POST http://localhost:8088/t \
         "anon": "user_abc123",
         "evt": "first_use",
         "t": 1692230460000,
-        "m": {"feature": "web_console"}
+        "m": {"feature": "search"}
       }
     ]
   }'
 ```
 
 **Event Schema:**
-- `schema` (required): Must be `"jwc.v1"`
-- `anon` (required): Anonymous user identifier (string)
-- `evt` (required): Event type (e.g., "install", "uninstall", "first_use")
+- `schema` (required): Must be `"jwc.v1"` - telemetry schema version
+- `anon` (required): Anonymous user identifier (string) - unique per user/installation
+- `evt` (required): Event type (e.g., "install", "uninstall", "first_use", "feature_used")
 - `t` (required): Timestamp (Unix milliseconds or ISO string)
-- `os` (optional): Operating system identifier
-- `ext` (optional): Extension version
-- `vscode` (optional): VS Code version
-- `m` (optional): Additional metadata object
+- `os` (optional): Operating system identifier (e.g., "Windows_NT", "Darwin", "Linux")
+- `ext` (optional): Application/extension version (e.g., "1.2.3")
+- `vscode` (optional): Host application version (if applicable)
+- `m` (optional): Additional metadata object with custom fields
 
 **Response:**
 ```json
@@ -192,7 +192,7 @@ Returns comprehensive installation analytics for the dashboard.
 **Response includes:**
 - Installation totals and time ranges
 - Monthly installation trends
-- Extension version breakdowns
+- Application version breakdowns
 - Operating system distribution
 - Geographic data (country-level)
 - Advanced analytics (seasonal patterns, growth analysis, etc.)
@@ -206,6 +206,82 @@ Returns non-sensitive configuration details.
 #### `GET /debug/logping` - Logging Test
 
 Tests log file writing and returns log configuration.
+
+## How to Send Telemetry Data
+
+### Understanding the Schema
+
+The telemetry system uses a simple JSON schema that any application can implement:
+
+```javascript
+{
+  "schema": "jwc.v1",        // Fixed schema version
+  "anon": "user_12345",      // Anonymous user ID (consistent per user)
+  "evt": "app_started",      // Event name (your choice)
+  "t": 1692230400000,        // Timestamp (Unix milliseconds)
+  "os": "Windows_NT",        // OS (optional but recommended)
+  "ext": "2.1.0",           // Your app version (optional)
+  "m": {                     // Custom metadata (optional)
+    "feature": "dashboard",
+    "duration_ms": 1500
+  }
+}
+```
+
+### Event Types You Can Track
+
+**Common Event Names:**
+- `install` - Application installation
+- `uninstall` - Application removal
+- `app_started` - Application launch
+- `app_closed` - Application shutdown
+- `feature_used` - Feature usage
+- `error_occurred` - Error tracking
+- `user_action` - User interactions
+- `performance_metric` - Performance data
+
+### Sending Data Methods
+
+**1. Single Event (Immediate):**
+```bash
+POST /t
+Content-Type: application/json
+
+{
+  "schema": "jwc.v1",
+  "anon": "user_abc123",
+  "evt": "feature_used",
+  "t": 1692230400000,
+  "m": {"feature": "export", "format": "pdf"}
+}
+```
+
+**2. Batch Events (Efficient):**
+```bash
+POST /t
+Content-Type: application/json
+
+{
+  "schema": "jwc.v1",
+  "batch": [
+    {"anon": "user_abc123", "evt": "app_started", "t": 1692230400000},
+    {"anon": "user_abc123", "evt": "feature_used", "t": 1692230460000, "m": {"feature": "search"}},
+    {"anon": "user_abc123", "evt": "app_closed", "t": 1692230500000}
+  ]
+}
+```
+
+### Response Format
+
+All requests return a JSON response:
+
+```json
+{
+  "ok": true,
+  "accepted": 2,    // Number of events successfully processed
+  "skipped": 0      // Number of events that failed validation
+}
+```
 
 ## Dashboard
 
@@ -224,7 +300,7 @@ The analytics dashboard is available as static HTML files in the `/dashboard` di
 - Key metrics summary cards
 
 **🔧 Version Analytics**
-- Extension version adoption rates
+- Application version adoption rates
 - Version lifecycle analysis with bubble charts
 - Migration patterns and adoption speed metrics
 
@@ -286,7 +362,7 @@ class TelemetryClient {
         evt: event,
         t: Date.now(),
         os: navigator.platform,
-        ext: '1.2.3', // Your extension version
+        ext: '1.2.3', // Your application version
         m: metadata
       };
 
@@ -333,15 +409,15 @@ class TelemetryClient {
 // Usage
 const telemetry = new TelemetryClient('https://telemetry.minigem.org');
 
-// Track extension installation
+// Track application installation
 await telemetry.track('install', {
-  installMethod: 'marketplace',
+  installMethod: 'download',
   firstInstall: true
 });
 
 // Track feature usage
 await telemetry.track('feature_used', {
-  feature: 'web_console',
+  feature: 'dashboard',
   duration_ms: 1500
 });
 ```
@@ -671,4 +747,4 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ---
 
-*Built with ❤️ for the Java Web Console community*
+*Built with ❤️ for developers who value privacy and performance*
