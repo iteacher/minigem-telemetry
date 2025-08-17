@@ -26,7 +26,7 @@
         --accent-orange: #f59e0b;
         --accent-red: #ef4444;
         --accent-cyan: #06b6d4;
-        --gradient-primary: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+        --gradient-primary: linear-gradient(135deg, #8b5cf6 0%, #ec4899 50%, #3b82f6 100%);
         --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
         --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
         --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
@@ -68,6 +68,9 @@
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         background-clip: text;
+        display: flex;
+        align-items: center;
+        line-height: 1.2;
       }
 
       .header .meta {
@@ -134,19 +137,6 @@
         align-items: center;
         justify-content: center;
         font-size: 1.25rem;
-        font-family: 'Material Symbols Outlined';
-        font-weight: normal;
-        font-style: normal;
-        line-height: 1;
-        letter-spacing: normal;
-        text-transform: none;
-        display: inline-block;
-        white-space: nowrap;
-        word-wrap: normal;
-        direction: ltr;
-        -webkit-font-feature-settings: 'liga';
-        font-feature-settings: 'liga';
-        -webkit-font-smoothing: antialiased;
       }
 
       .stat-value {
@@ -319,13 +309,98 @@
           font-size: 1.875rem;
         }
       }
+      
+      /* Growth Trajectory Dashboard Styles */
+      .growth-dashboard {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      }
+      
+      .growth-dashboard h4 {
+        font-weight: 600;
+        letter-spacing: -0.025em;
+      }
+      
+      .growth-dashboard h5 {
+        font-weight: 500;
+        font-size: 0.95rem;
+        letter-spacing: -0.01em;
+      }
+      
+      .growth-dashboard h6 {
+        font-weight: 500;
+        font-size: 0.9rem;
+        letter-spacing: -0.01em;
+      }
+      
+      .metric-card {
+        font-family: 'Inter', sans-serif;
+        border-radius: 10px;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+      }
+      
+      .metric-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+      }
+      
+      .metric-value {
+        font-weight: 600;
+        font-size: 0.95rem;
+        letter-spacing: -0.01em;
+      }
+      
+      .metric-label {
+        font-weight: 400;
+        font-size: 0.8rem;
+        opacity: 0.8;
+      }
+      
+      .analysis-section {
+        background: rgba(15, 23, 42, 0.9) !important;
+        border-radius: 10px;
+        border: 1px solid rgba(51, 65, 85, 0.8) !important;
+        backdrop-filter: blur(10px);
+      }
+      
+      .recommendation-box {
+        background: rgba(59, 130, 246, 0.08) !important;
+        border-radius: 8px;
+        border-left: 3px solid #3b82f6 !important;
+        backdrop-filter: blur(5px);
+      }
+      
+      .info-guide {
+        background: rgba(6, 182, 212, 0.08) !important;
+        border-radius: 10px;
+        border: 1px solid rgba(6, 182, 212, 0.2) !important;
+      }
+      
+      /* Footer styles */
+      footer a {
+        transition: color 0.2s ease;
+      }
+      
+      footer a:hover {
+        color: var(--accent-blue) !important;
+      }
+      
+      @media (max-width: 768px) {
+        footer div[style*="flex"] {
+          flex-direction: column;
+          gap: 0.75rem !important;
+        }
+        
+        footer div[style*="flex"] span:contains("•") {
+          display: none;
+        }
+      }
     </style>
   </head>
   <body>
     <div class="container">
       <header class="header">
         <h1>
-          <img src="assets/logo.png" alt="Minigem" style="height: 32px; width: auto; margin-right: 12px; vertical-align: middle;">
+          <img src="assets/logo.png" alt="Minigem" style="height: 36px; width: auto; margin-right: 16px; display: block;">
           Minigem Analytics
         </h1>
         <div class="meta">
@@ -338,7 +413,9 @@
         <div class="stat-card highlight">
           <div class="stat-header">
             <div class="stat-title">Total Installs</div>
-            <div class="stat-icon" style="background: var(--accent-blue); color: white;">analytics</div>
+            <div class="stat-icon" style="background: var(--accent-blue); color: white;">
+              <span class="material-symbols-outlined">analytics</span>
+            </div>
           </div>
           <div class="stat-value" id="totalInstalls">0</div>
           <div class="stat-subtitle">All-time installations</div>
@@ -347,7 +424,9 @@
         <div class="stat-card">
           <div class="stat-header">
             <div class="stat-title">Monthly Growth</div>
-            <div class="stat-icon" style="background: var(--accent-green); color: white;">trending_up</div>
+            <div class="stat-icon" style="background: var(--accent-green); color: white;">
+              <span class="material-symbols-outlined">trending_up</span>
+            </div>
           </div>
           <div class="stat-value" id="growthValue">+0</div>
           <div class="stat-subtitle" id="growthInfo">Loading growth data...</div>
@@ -356,14 +435,14 @@
         <div class="stat-card">
           <div class="stat-header">
             <div class="stat-title">Time Period</div>
-            <div class="stat-icon" style="background: var(--accent-purple); color: white;">schedule</div>
+            <div class="stat-icon" style="background: var(--accent-purple); color: white;">
+              <span class="material-symbols-outlined">schedule</span>
+            </div>
           </div>
           <div class="stat-value" id="monthsCount">0</div>
           <div class="stat-subtitle" id="periodRange">months tracked</div>
         </div>
-      </div>
-
-      <div class="charts-grid">
+      </div>      <div class="charts-grid">
         <div class="chart-card">
           <div class="chart-header">
             <div>
@@ -1683,82 +1762,82 @@
               const speedCategory = growthSpeed > 10 ? 'Fast' : growthSpeed > 5 ? 'Moderate' : 'Slow';
               
               infoElement.innerHTML = `
-                <div style="background: linear-gradient(135deg, #1e293b 0%, #334155 100%); padding: 1.5rem; border-radius: 12px; border: 1px solid #475569;">
-                  <h4 style="margin: 0 0 1.5rem 0; color: #f1f5f9; font-size: 1.2rem; display: flex; align-items: center; gap: 0.5rem;">
-                    <span class="material-symbols-outlined" style="font-size: 1.5rem;">analytics</span>
+                <div class="growth-dashboard" style="background: linear-gradient(135deg, #1e293b 0%, #334155 100%); padding: 1.5rem; border-radius: 12px; border: 1px solid #475569;">
+                  <h4 style="margin: 0 0 1.5rem 0; color: #f1f5f9; font-size: 1.25rem; display: flex; align-items: center; gap: 0.75rem; font-weight: 600;">
+                    <span class="material-symbols-outlined" style="font-size: 1.5rem; color: #3b82f6;">analytics</span>
                     Growth Analysis Dashboard
                   </h4>
                   
                   <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
                     <!-- Trend Direction -->
-                    <div style="text-align: center; padding: 1rem; background: rgba(59, 130, 246, 0.1); border-radius: 8px; border: 1px solid rgba(59, 130, 246, 0.3);">
-                      <span class="material-symbols-outlined" style="font-size: 2.5rem; margin-bottom: 0.5rem; color: #3b82f6; display: block;">${trendIcon}</span>
-                      <div style="color: #3b82f6; font-weight: bold; margin-bottom: 0.25rem;">${trendDirection}</div>
-                      <div style="color: #94a3b8; font-size: 0.9rem;">${speedCategory} Pace</div>
+                    <div class="metric-card" style="text-align: center; padding: 1.25rem; background: rgba(59, 130, 246, 0.12); border-radius: 10px; border: 1px solid rgba(59, 130, 246, 0.3);">
+                      <span class="material-symbols-outlined" style="font-size: 2.5rem; margin-bottom: 0.75rem; color: #3b82f6; display: block;">${trendIcon}</span>
+                      <div class="metric-value" style="color: #3b82f6; font-weight: 600; margin-bottom: 0.5rem; font-size: 1rem;">${trendDirection}</div>
+                      <div class="metric-label" style="color: #94a3b8; font-size: 0.85rem; font-weight: 400;">${speedCategory} Pace</div>
                     </div>
                     
                     <!-- Prediction Accuracy -->
-                    <div style="text-align: center; padding: 1rem; background: rgba(16, 185, 129, 0.1); border-radius: 8px; border: 1px solid rgba(16, 185, 129, 0.3);">
-                      <span class="material-symbols-outlined" style="font-size: 2.5rem; margin-bottom: 0.5rem; color: #10b981; display: block;">target</span>
-                      <div style="color: #10b981; font-weight: bold; margin-bottom: 0.25rem;">${rSquaredQuality}</div>
-                      <div style="color: #94a3b8; font-size: 0.9rem;">Predictability</div>
+                    <div class="metric-card" style="text-align: center; padding: 1.25rem; background: rgba(16, 185, 129, 0.12); border-radius: 10px; border: 1px solid rgba(16, 185, 129, 0.3);">
+                      <span class="material-symbols-outlined" style="font-size: 2.5rem; margin-bottom: 0.75rem; color: #10b981; display: block;">gps_fixed</span>
+                      <div class="metric-value" style="color: #10b981; font-weight: 600; margin-bottom: 0.5rem; font-size: 1rem;">${rSquaredQuality}</div>
+                      <div class="metric-label" style="color: #94a3b8; font-size: 0.85rem; font-weight: 400;">Predictability</div>
                     </div>
                     
                     <!-- Growth Type -->
-                    <div style="text-align: center; padding: 1rem; background: rgba(139, 92, 246, 0.1); border-radius: 8px; border: 1px solid rgba(139, 92, 246, 0.3);">
-                      <span class="material-symbols-outlined" style="font-size: 2.5rem; margin-bottom: 0.5rem; color: #8b5cf6; display: block;">${trajectory.exponential?.trend === 'Exponential Growth' ? 'rocket_launch' : 'show_chart'}</span>
-                      <div style="color: #8b5cf6; font-weight: bold; margin-bottom: 0.25rem;">${trajectory.exponential?.trend || 'Linear'}</div>
-                      <div style="color: #94a3b8; font-size: 0.9rem;">Growth Pattern</div>
+                    <div class="metric-card" style="text-align: center; padding: 1.25rem; background: rgba(139, 92, 246, 0.12); border-radius: 10px; border: 1px solid rgba(139, 92, 246, 0.3);">
+                      <span class="material-symbols-outlined" style="font-size: 2.5rem; margin-bottom: 0.75rem; color: #8b5cf6; display: block;">${trajectory.exponential?.trend === 'Exponential Growth' ? 'rocket_launch' : 'show_chart'}</span>
+                      <div class="metric-value" style="color: #8b5cf6; font-weight: 600; margin-bottom: 0.5rem; font-size: 1rem;">${trajectory.exponential?.trend || 'Linear'}</div>
+                      <div class="metric-label" style="color: #94a3b8; font-size: 0.85rem; font-weight: 400;">Growth Pattern</div>
                     </div>
                   </div>
                   
                   <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
                     <!-- Left Column: Technical Details -->
-                    <div style="background: rgba(15, 23, 42, 0.8); padding: 1rem; border-radius: 8px; border: 1px solid #334155;">
-                      <h5 style="margin: 0 0 1rem 0; color: #e2e8f0; display: flex; align-items: center; gap: 0.5rem;">
-                        <span class="material-symbols-outlined" style="font-size: 1.2rem;">search</span>
+                    <div class="analysis-section" style="padding: 1.25rem;">
+                      <h5 style="margin: 0 0 1.25rem 0; color: #e2e8f0; display: flex; align-items: center; gap: 0.75rem; font-size: 1rem;">
+                        <span class="material-symbols-outlined" style="font-size: 1.25rem; color: #64748b;">analytics</span>
                         Technical Analysis
                       </h5>
-                      <div style="color: #cbd5e1; line-height: 1.6;">
-                        <div style="margin-bottom: 0.75rem;">
-                          <strong style="color: #f1f5f9;">Slope:</strong> ${trajectory.linear?.slope || 'N/A'} installs/month<br>
-                          <span style="color: #94a3b8; font-size: 0.85rem;">Rate of change in monthly installs</span>
+                      <div style="color: #cbd5e1; line-height: 1.7; font-size: 0.9rem;">
+                        <div style="margin-bottom: 1rem; padding: 0.75rem; background: rgba(51, 65, 85, 0.4); border-radius: 6px;">
+                          <strong style="color: #f1f5f9; font-weight: 600;">Slope:</strong> ${trajectory.linear?.slope || 'N/A'} installs/month<br>
+                          <span style="color: #94a3b8; font-size: 0.8rem; margin-top: 0.25rem; display: block;">Rate of change in monthly installs</span>
                         </div>
-                        <div style="margin-bottom: 0.75rem;">
-                          <strong style="color: #f1f5f9;">R² Score:</strong> ${trajectory.linear?.rSquared || 'N/A'}<br>
-                          <span style="color: #94a3b8; font-size: 0.85rem;">How well the trend fits the data (0-1 scale)</span>
+                        <div style="margin-bottom: 1rem; padding: 0.75rem; background: rgba(51, 65, 85, 0.4); border-radius: 6px;">
+                          <strong style="color: #f1f5f9; font-weight: 600;">R² Score:</strong> ${trajectory.linear?.rSquared || 'N/A'}<br>
+                          <span style="color: #94a3b8; font-size: 0.8rem; margin-top: 0.25rem; display: block;">How well the trend fits the data (0-1 scale)</span>
                         </div>
-                        <div>
-                          <strong style="color: #f1f5f9;">Trend:</strong> ${trajectory.linear?.trend || 'Unknown'}<br>
-                          <span style="color: #94a3b8; font-size: 0.85rem;">Overall direction of growth</span>
+                        <div style="padding: 0.75rem; background: rgba(51, 65, 85, 0.4); border-radius: 6px;">
+                          <strong style="color: #f1f5f9; font-weight: 600;">Trend:</strong> ${trajectory.linear?.trend || 'Unknown'}<br>
+                          <span style="color: #94a3b8; font-size: 0.8rem; margin-top: 0.25rem; display: block;">Overall direction of growth</span>
                         </div>
                       </div>
                     </div>
                     
                     <!-- Right Column: Predictions & Actions -->
-                    <div style="background: rgba(15, 23, 42, 0.8); padding: 1rem; border-radius: 8px; border: 1px solid #334155;">
-                      <h5 style="margin: 0 0 1rem 0; color: #e2e8f0; display: flex; align-items: center; gap: 0.5rem;">
-                        <span class="material-symbols-outlined" style="font-size: 1.2rem;">crystal_ball</span>
+                    <div class="analysis-section" style="padding: 1.25rem;">
+                      <h5 style="margin: 0 0 1.25rem 0; color: #e2e8f0; display: flex; align-items: center; gap: 0.75rem; font-size: 1rem;">
                         Predictions & Actions
                       </h5>
-                      <div style="color: #cbd5e1; line-height: 1.6;">
-                        <div style="margin-bottom: 0.75rem;">
-                          <strong style="color: #f1f5f9;">Next Month:</strong> ${trajectory.prediction?.nextMonth || 'N/A'} installs<br>
-                          <strong style="color: #f1f5f9;">Next 3 Months:</strong> ${trajectory.prediction?.next3Months || 'N/A'} installs
+                      <div style="color: #cbd5e1; line-height: 1.7; font-size: 0.9rem;">
+                        <div style="margin-bottom: 1.25rem; padding: 0.75rem; background: rgba(51, 65, 85, 0.4); border-radius: 6px;">
+                          <strong style="color: #f1f5f9; font-weight: 600;">Next Month:</strong> ${trajectory.prediction?.nextMonth || 'N/A'} installs<br>
+                          <strong style="color: #f1f5f9; font-weight: 600;">Next 3 Months:</strong> ${trajectory.prediction?.next3Months || 'N/A'} installs
                         </div>
-                        <div style="padding: 0.75rem; background: rgba(59, 130, 246, 0.1); border-radius: 6px; border-left: 3px solid #3b82f6;">
-                          <strong style="color: #3b82f6; display: flex; align-items: center; gap: 0.5rem;">
-                            <span class="material-symbols-outlined" style="font-size: 1rem;">lightbulb</span>
-                            Recommendation:
-                          </strong><br>
-                          <div style="margin-top: 0.5rem; color: #cbd5e1;">
-                            ${(trajectory.linear?.rSquared || 0) > 0.8 ? 
-                              '<span class="material-symbols-outlined" style="font-size: 1rem; color: #10b981; vertical-align: middle;">check_circle</span> Growth is predictable - maintain current strategies' : 
-                              '<span class="material-symbols-outlined" style="font-size: 1rem; color: #f59e0b; vertical-align: middle;">warning</span> High volatility - need more consistent marketing'}
-                            <br>
-                            ${(trajectory.linear?.slope || 0) > 0 ? 
-                              '<span class="material-symbols-outlined" style="font-size: 1rem; color: #3b82f6; vertical-align: middle;">trending_up</span> Positive trajectory - consider scaling efforts' : 
-                              '<span class="material-symbols-outlined" style="font-size: 1rem; color: #ef4444; vertical-align: middle;">build</span> Growth declining - intervention needed'}
+                        <div class="recommendation-box" style="padding: 1rem;">
+                          <strong style="color: #3b82f6; display: flex; align-items: center; gap: 0.5rem; font-weight: 600; margin-bottom: 0.75rem;">
+                            <span class="material-symbols-outlined" style="font-size: 1.1rem;">lightbulb</span>
+                            Recommendations
+                          </strong>
+                          <div style="color: #cbd5e1; font-size: 0.85rem; line-height: 1.6;">
+                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                              <span class="material-symbols-outlined" style="font-size: 1rem; color: ${(trajectory.linear?.rSquared || 0) > 0.8 ? '#10b981' : '#f59e0b'};">${(trajectory.linear?.rSquared || 0) > 0.8 ? 'check_circle' : 'warning'}</span>
+                              ${(trajectory.linear?.rSquared || 0) > 0.8 ? 'Growth is predictable - maintain current strategies' : 'High volatility - need more consistent marketing'}
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                              <span class="material-symbols-outlined" style="font-size: 1rem; color: ${(trajectory.linear?.slope || 0) > 0 ? '#3b82f6' : '#ef4444'};">${(trajectory.linear?.slope || 0) > 0 ? 'trending_up' : 'build'}</span>
+                              ${(trajectory.linear?.slope || 0) > 0 ? 'Positive trajectory - consider scaling efforts' : 'Growth declining - intervention needed'}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -1766,15 +1845,15 @@
                   </div>
                   
                   <!-- Bottom: Quick Explanations -->
-                  <div style="margin-top: 1.5rem; padding: 1rem; background: rgba(6, 182, 212, 0.1); border-radius: 8px; border: 1px solid rgba(6, 182, 212, 0.3);">
-                    <h6 style="margin: 0 0 0.75rem 0; color: #06b6d4; display: flex; align-items: center; gap: 0.5rem;">
-                      <span class="material-symbols-outlined" style="font-size: 1.1rem;">menu_book</span>
-                      Quick Guide
+                  <div class="info-guide" style="margin-top: 1.5rem; padding: 1.25rem;">
+                    <h6 style="margin: 0 0 1rem 0; color: #06b6d4; display: flex; align-items: center; gap: 0.75rem; font-weight: 600;">
+                      <span class="material-symbols-outlined" style="font-size: 1.2rem;">help_center</span>
+                      Quick Reference Guide
                     </h6>
-                    <div style="color: #94a3b8; font-size: 0.85rem; line-height: 1.5;">
-                      <strong>Slope:</strong> How many installs increase/decrease per month | 
-                      <strong>R² Score:</strong> 1.0 = perfect prediction, 0.0 = random | 
-                      <strong>Exponential:</strong> Accelerating growth vs steady linear growth
+                    <div style="color: #94a3b8; font-size: 0.85rem; line-height: 1.6; font-weight: 400;">
+                      <strong style="color: #cbd5e1;">Slope:</strong> How many installs increase/decrease per month &nbsp;•&nbsp; 
+                      <strong style="color: #cbd5e1;">R² Score:</strong> 1.0 = perfect prediction, 0.0 = random &nbsp;•&nbsp; 
+                      <strong style="color: #cbd5e1;">Exponential:</strong> Accelerating growth vs steady linear growth
                     </div>
                   </div>
                 </div>
@@ -1899,5 +1978,38 @@
       loadData();
       setInterval(loadData, 30000); // Refresh every 30 seconds
     </script>
+
+    <!-- Footer -->
+    <footer style="margin-top: 3rem; padding: 2rem 0; border-top: 1px solid var(--border); background: rgba(15, 23, 42, 0.8);">
+      <div style="max-width: 1200px; margin: 0 auto; padding: 0 1rem; text-align: center;">
+        <div style="display: flex; justify-content: center; align-items: center; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap;">
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span class="material-symbols-outlined" style="font-size: 1.2rem; color: var(--text-muted);">code</span>
+            <span style="color: var(--text-secondary); font-size: 0.9rem;">
+              <a href="https://github.com/iteacher/minigem-telemetry" target="_blank" style="color: var(--text-secondary); text-decoration: none; display: flex; align-items: center; gap: 0.5rem;">
+                <span class="material-symbols-outlined" style="font-size: 1.1rem;">open_in_new</span>
+                View on GitHub
+              </a>
+            </span>
+          </div>
+          <span style="color: var(--text-muted);">•</span>
+          <span style="color: var(--text-secondary); font-size: 0.9rem;">MIT License</span>
+          <span style="color: var(--text-muted);">•</span>
+          <span style="color: var(--text-secondary); font-size: 0.9rem;">
+            Created by <a href="https://minigem.uk" target="_blank" style="color: var(--accent-blue); text-decoration: none;">minigem.uk</a>
+          </span>
+        </div>
+        <div style="color: var(--text-muted); font-size: 0.8rem; line-height: 1.5;">
+          <p style="margin: 0 0 0.5rem 0;">
+            Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), 
+            to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, 
+            and/or sell copies of the Software.
+          </p>
+          <p style="margin: 0;">
+            THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED.
+          </p>
+        </div>
+      </div>
+    </footer>
   </body>
 </html>
