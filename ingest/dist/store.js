@@ -189,16 +189,23 @@ function generateOsTimeline(s) {
             allMonths.push(`${y}-${m}`);
         }
     }
-    // Get all OS types (likely to be manageable number)
+    // Get all OS types from byOs, but filter to only those with non-zero timeline data
     const allOsTypes = Object.keys(s.byOs).sort();
-    // Build timeline data for each OS
+    const activeOsTypes = [];
+    // Build timeline data for each OS and only include those with non-zero data
     const osData = {};
     for (const osType of allOsTypes) {
-        osData[osType] = allMonths.map(month => s.osByMonth[month]?.[osType] || 0);
+        const timelineData = allMonths.map(month => s.osByMonth[month]?.[osType] || 0);
+        // Only include OS types that have at least one non-zero value in the timeline
+        const hasData = timelineData.some(value => value > 0);
+        if (hasData) {
+            activeOsTypes.push(osType);
+            osData[osType] = timelineData;
+        }
     }
     return {
         months: allMonths,
-        osTypes: allOsTypes,
+        osTypes: activeOsTypes,
         data: osData
     };
 }
