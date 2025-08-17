@@ -157,6 +157,7 @@
         grid-template-columns: 2fr 1fr;
         gap: 2rem;
         margin-bottom: 2.5rem;
+        margin-top: 1.5rem;
       }
 
       .chart-card {
@@ -1651,27 +1652,27 @@
             if (validPlatforms.length > 0) {
               // Group platforms by category for better legend
               const categories = {
-                'ARM Platforms': [],
-                'Linux Distributions': [],
-                'Other Platforms': []
+                'ARM': [],
+                'Linux': [],
+                'Other': []
               };
               
               validPlatforms.forEach(platform => {
                 const trend = data.platformTrends[platform];
                 if (trend?.category === 'ARM') {
-                  categories['ARM Platforms'].push(platform);
+                  categories['ARM'].push(platform);
                 } else if (trend?.category === 'Linux') {
-                  categories['Linux Distributions'].push(platform);
+                  categories['Linux'].push(platform);
                 } else {
-                  categories['Other Platforms'].push(platform);
+                  categories['Other'].push(platform);
                 }
               });
               
               const datasets = [];
               const colors = {
-                'ARM Platforms': '#10b981',
-                'Linux Distributions': '#3b82f6', 
-                'Other Platforms': '#6b7280'
+                'ARM': '#10b981',
+                'Linux': '#3b82f6', 
+                'Other': '#6b7280'
               };
               
               Object.entries(categories).forEach(([category, platforms]) => {
@@ -1724,7 +1725,11 @@
                       labels: {
                         color: '#9ca3af',
                         usePointStyle: true,
-                        pointStyle: 'circle'
+                        pointStyle: 'circle',
+                        padding: 20
+                      },
+                      margin: {
+                        bottom: 30
                       }
                     },
                     tooltip: {
@@ -1850,11 +1855,17 @@
                       <span class="material-symbols-outlined" style="font-size: 1.2rem;">help_center</span>
                       Quick Reference Guide
                     </h6>
-                    <div style="color: #94a3b8; font-size: 0.85rem; line-height: 1.6; font-weight: 400;">
-                      <strong style="color: #cbd5e1;">Slope:</strong> How many installs increase/decrease per month &nbsp;•&nbsp; 
-                      <strong style="color: #cbd5e1;">R² Score:</strong> 1.0 = perfect prediction, 0.0 = random &nbsp;•&nbsp; 
-                      <strong style="color: #cbd5e1;">Exponential:</strong> Accelerating growth vs steady linear growth
-                    </div>
+                    <ul style="color: #94a3b8; font-size: 0.85rem; line-height: 1.8; font-weight: 400; margin: 0; padding-left: 1.5rem; list-style-type: disc;">
+                      <li style="margin-bottom: 0.5rem;">
+                        <strong style="color: #cbd5e1;">Slope:</strong> How many installs increase/decrease per month
+                      </li>
+                      <li style="margin-bottom: 0.5rem;">
+                        <strong style="color: #cbd5e1;">R² Score:</strong> 1.0 = perfect prediction, 0.0 = random
+                      </li>
+                      <li>
+                        <strong style="color: #cbd5e1;">Exponential:</strong> Accelerating growth vs steady linear growth
+                      </li>
+                    </ul>
                   </div>
                 </div>
               `;
