@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { CONFIG } from './config.js';
 
+// Single, consolidated JSON store using CONFIG.STORE_FILE
 type Store = {
   meta: { createdAt: string; updatedAt: string };
   months: Record<string /*year*/, Record<string /*mm*/, { installs: number }>>;
@@ -10,7 +11,7 @@ type Store = {
   byCountry: Record<string, number>;
 };
 
-const FILE = process.env.STATS_JSON_FILE || path.join(CONFIG.LOG_DIR || '/opt/jwc-telemetry/logs', 'installs.json');
+const FILE = CONFIG.STORE_FILE;
 
 function ensureDirExists(filePath: string) {
   const dir = path.dirname(filePath);
@@ -48,19 +49,26 @@ function writeStore(s: Store) {
   fs.renameSync(tmp, FILE);
 }
 
-// Simple in-process mutex to serialize updates
+// Serialize writes to avoid race corruption
 let lock = Promise.resolve();
 function serialize<T>(fn: () => Promise<T> | T): Promise<T> {
-  lock = lock.then(async () => { await fn(); }).catch(() => {/* swallow to keep chain alive */});
+  lock = lock.then(async () => { await fn(); }).catch(() => {/* keep chain */});
   return lock as Promise<T>;
 }
 
-export async function upsertFromEvent(ev: any, geo?: { country?: string }) {
+export async function storeInit(): Promise<void> {
+  // Ensure file exists
+  await serialize(() => { writeStore(readStore()); });
+}
+
+export async function storeUpsertInstall(ev: any, geo?: { country?: string }) {
   await serialize(() => {
     const store = readStore();
     const nowIso = new Date().toISOString();
 
     const evt = String(ev.evt || '');
+    if (evt !== 'install.created' && evt !== 'extension.upgraded') return;
+
     const ext = String(ev.ext || '0.0.0');
     const os = String(ev.os || 'unknown');
     const country = String((geo?.country || 'Unknown')).toUpperCase();
@@ -68,7 +76,7 @@ export async function upsertFromEvent(ev: any, geo?: { country?: string }) {
     // Month key from timestamp (UTC)
     let t = typeof ev.t === 'number' ? ev.t : Date.parse(ev.t);
     if (!Number.isFinite(t)) t = Date.now();
-    if (t < 1e12) t = t * 1000;
+    if (t < 1e12) t = t * 1000; // seconds -> ms
     const d = new Date(t);
     const y = String(d.getUTCFullYear());
     const m = String(d.getUTCMonth() + 1).padStart(2, '0');
@@ -92,32 +100,42 @@ export async function upsertFromEvent(ev: any, geo?: { country?: string }) {
   });
 }
 
-export function readStatsMonthly() {
+export function storeReadInstallStats(windowMonths = 12) {
   const s = readStore();
-  // Build ordered monthly series from first stored month to latest present in file
+  // Build ordered monthly series from Aug 2025 onward
   const months: string[] = [];
   const counts: number[] = [];
   const years = Object.keys(s.months).sort();
   for (const y of years) {
     const monthsInYear = Object.keys(s.months[y] || {}).sort();
     for (const m of monthsInYear) {
-  const ym = `${y}-${m}`;
-  if (ym < '2025-08') continue; // Only track from Aug 2025 onwards
-  months.push(ym);
-  counts.push(Number(s.months[y][m]?.installs || 0));
+      const ym = `${y}-${m}`;
+      if (ym < '2025-08') continue; // Only track from Aug 2025 onwards
+      months.push(ym);
+      counts.push(Number(s.months[y][m]?.installs || 0));
     }
   }
+
+  // Window the last N months
+  const end = months.length;
+  const start = Math.max(0, end - windowMonths);
+  const winMonths = months.slice(start, end);
+  const winCounts = counts.slice(start, end);
+
   const installsTotal = counts.reduce((a, b) => a + b, 0);
   return {
-    from: months[0] || new Date().toISOString().slice(0, 7),
-    to: months[months.length - 1] || new Date().toISOString().slice(0, 7),
-    windowMonths: months.length,
+    from: winMonths[0] || new Date().toISOString().slice(0, 7),
+    to: winMonths[winMonths.length - 1] || new Date().toISOString().slice(0, 7),
+    windowMonths: winMonths.length,
     installsTotal,
-    monthlyInstalls: { months, counts },
+    monthlyInstalls: { months: winMonths, counts: winCounts },
+    // Back-compat for UI pieces that still read dailyInstalls
+    dailyInstalls: { dates: winMonths, counts: winCounts },
     byExt: s.byExt,
     byOs: s.byOs,
     byCountry: s.byCountry,
-    updatedAt: s.meta.updatedAt
+    updatedAt: s.meta.updatedAt,
+    file: FILE
   };
 }
 

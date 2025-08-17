@@ -1,3 +1,5 @@
+import path from 'path';
+
 export const CONFIG = {
   // HTTP server port: always prefer platform-injected PORT; never default to DB port
   PORT: Number.isFinite(parseInt(process.env.PORT || '', 10)) ? parseInt(process.env.PORT as string, 10) : 3000,
@@ -11,5 +13,7 @@ export const CONFIG = {
   // monthly stats view (no DB)
   STATS_WINDOW_DAYS: parseInt(process.env.STATS_WINDOW_DAYS || '7', 10),
   // Debug/trace flags (DB removed, but keep stats trace flag)
-  DEBUG_STATS_TRACE: ['1','true','yes'].includes(String(process.env.DEBUG_STATS_TRACE||'').toLowerCase())
+  DEBUG_STATS_TRACE: ['1','true','yes'].includes(String(process.env.DEBUG_STATS_TRACE||'').toLowerCase()),
+  // File store path for installs counters
+  STORE_FILE: process.env.STATS_JSON_FILE || path.join(process.env.LOG_DIR || '/opt/jwc-telemetry/logs', 'installs.json')
 };

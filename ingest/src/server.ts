@@ -4,7 +4,7 @@ import { CONFIG } from './config.js';
 import { validateEnvelope, validateEvent, normalizeEvent } from './validate.js';
 import { initGeo, lookup } from './geo.js';
 import { log } from './logger.js';
-import { upsertFromEvent, readStatsMonthly, pathToStore } from './store.js';
+import { storeInit, storeUpsertInstall, storeReadInstallStats, pathToStore } from './store.js';
 
 function h(req: FastifyRequest, name: string): string | undefined {
   const v = req.headers[name.toLowerCase()];
@@ -61,6 +61,7 @@ async function main() {
   app.addHook('onResponse', async (req, reply) => { log.info('res', { method: req.method, url: req.url, status: reply.statusCode }); });
   log.info('boot.start', { port: CONFIG.PORT });
   await initGeo();
+  await storeInit();
   log.info('boot.store.ready', { file: pathToStore() });
 
   log.info('boot.register.rateLimit.start');
@@ -106,7 +107,7 @@ async function main() {
 
   // Minimal installs-only stats for simplified dashboard
   app.get('/stats/install', async (_req: FastifyRequest, reply: FastifyReply) => {
-    try { return readStatsMonthly(); } catch (e) { log.error('stats.install.error', { err: String(e) }); return reply.code(500).send({ error: 'server_error' }); }
+    try { return storeReadInstallStats(12); } catch (e) { log.error('stats.install.error', { err: String(e) }); return reply.code(500).send({ error: 'server_error' }); }
   });
 
   app.post('/t', async (req: FastifyRequest, reply: FastifyReply) => {
@@ -127,7 +128,7 @@ async function main() {
         const ev = normalizeEvent(evRaw);
         if (!ev || !validateEvent(ev)) { skipped++; log.warn('event skipped: invalid', { evRaw }); continue; }
         try {
-          await upsertFromEvent(ev, geo);
+          await storeUpsertInstall(ev, geo);
           accepted++;
           log.info('ingest: inserted', { ev, geo });
         }
