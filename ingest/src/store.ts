@@ -113,28 +113,26 @@ export function storeReadInstallStats(windowMonths = 12) {
     }
   }
   
-  // Build ordered monthly series from Aug 2025 onward for the chart
+  // Build complete monthly series for ALL time periods (no filtering)
   const months: string[] = [];
   const counts: number[] = [];
   for (const y of years) {
     const monthsInYear = Object.keys(s.months[y] || {}).sort();
     for (const m of monthsInYear) {
       const ym = `${y}-${m}`;
-      if (ym < '2025-08') continue; // Only show from Aug 2025 onwards in chart
       months.push(ym);
       counts.push(Number(s.months[y][m]?.installs || 0));
     }
   }
 
-  // Window the last N months for the chart
-  const end = months.length;
-  const start = Math.max(0, end - windowMonths);
-  const winMonths = months.slice(start, end);
-  const winCounts = counts.slice(start, end);
+  // Show ALL months instead of windowing (user wants to see all data)
+  const winMonths = months;
+  const winCounts = counts;
   return {
-    from: winMonths[0] || new Date().toISOString().slice(0, 7),
-    to: winMonths[winMonths.length - 1] || new Date().toISOString().slice(0, 7),
+    from: winMonths[0] || 'N/A',
+    to: winMonths[winMonths.length - 1] || 'N/A',
     windowMonths: winMonths.length,
+    totalMonths: winMonths.length,
     installsTotal,
     monthlyInstalls: { months: winMonths, counts: winCounts },
     // Back-compat for UI pieces that still read dailyInstalls
