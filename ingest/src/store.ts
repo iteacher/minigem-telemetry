@@ -13,6 +13,8 @@ type Store = {
   versionsByMonth: Record<string /*YYYY-MM*/, Record<string /*version*/, number>>;
   // NEW: OS installs by month for timeline analysis
   osByMonth: Record<string /*YYYY-MM*/, Record<string /*os*/, number>>;
+  // NEW: Geographic installs by month for timeline analysis
+  geoByMonth: Record<string /*YYYY-MM*/, Record<string /*country*/, number>>;
 };
 
 const FILE = CONFIG.STORE_FILE;
@@ -31,7 +33,8 @@ function defaultStore(): Store {
     byOs: {},
     byCountry: {},
     versionsByMonth: {},
-    osByMonth: {}
+    osByMonth: {},
+    geoByMonth: {}
   };
 }
 
@@ -115,6 +118,10 @@ export async function storeUpsertInstall(ev: any, geo?: { country?: string }) {
       // NEW: Track OS installs by month
       if (!store.osByMonth[monthKey]) store.osByMonth[monthKey] = {};
       store.osByMonth[monthKey][os] = (store.osByMonth[monthKey][os] || 0) + 1;
+
+      // NEW: Track geographic installs by month
+      if (!store.geoByMonth[monthKey]) store.geoByMonth[monthKey] = {};
+      store.geoByMonth[monthKey][country] = (store.geoByMonth[monthKey][country] || 0) + 1;
     }
 
     store.meta.updatedAt = nowIso;
@@ -164,6 +171,7 @@ export function storeReadInstallStats(windowMonths = 12) {
     byCountry: s.byCountry,
     versionTimeline: generateVersionTimeline(s),
     osTimeline: generateOsTimeline(s),
+    geoTimeline: generateGeoTimeline(s),
     updatedAt: s.meta.updatedAt,
     file: FILE
   };
@@ -229,6 +237,39 @@ function generateOsTimeline(s: Store) {
     months: allMonths,
     osTypes: allOsTypes,
     data: osData
+  };
+}
+
+function generateGeoTimeline(s: Store) {
+  // Get all months in chronological order
+  const allMonths: string[] = [];
+  const years = Object.keys(s.months).sort();
+  for (const y of years) {
+    const monthsInYear = Object.keys(s.months[y] || {}).sort();
+    for (const m of monthsInYear) {
+      allMonths.push(`${y}-${m}`);
+    }
+  }
+
+  // Get top countries (by total installs) to avoid chart clutter
+  const topCountries = Object.entries(s.byCountry)
+    .sort(([,a], [,b]) => b - a)
+    .slice(0, 10) // Show top 10 countries
+    .map(([country]) => country);
+
+  // Build timeline data for each country
+  const geoData: Record<string, number[]> = {};
+  
+  for (const country of topCountries) {
+    geoData[country] = allMonths.map(month => 
+      s.geoByMonth[month]?.[country] || 0
+    );
+  }
+
+  return {
+    months: allMonths,
+    countries: topCountries,
+    data: geoData
   };
 }
 
