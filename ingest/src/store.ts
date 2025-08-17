@@ -26,15 +26,67 @@ function ensureDirExists(filePath: string) {
 
 function defaultStore(): Store {
   const now = new Date().toISOString();
+  const currentYear = String(new Date().getUTCFullYear());
+  const currentMonth = String(new Date().getUTCMonth() + 1).padStart(2, '0');
+  const currentMonthKey = `${currentYear}-${currentMonth}`;
+  
   return {
     meta: { createdAt: now, updatedAt: now },
-    months: {},
-    byExt: {},
-    byOs: {},
-    byCountry: {},
-    versionsByMonth: {},
-    osByMonth: {},
-    geoByMonth: {}
+    months: {
+      [currentYear]: {
+        [currentMonth]: { installs: 0 }
+      }
+    },
+    byExt: {
+      "0.0.0": 0
+    },
+    byOs: {
+      "darwin-arm64": 0,
+      "darwin-x64": 0,
+      "win32-x64": 0,
+      "win32-arm64": 0,
+      "linux-x64": 0,
+      "linux-arm64": 0,
+      "Unknown": 0
+    },
+    byCountry: {
+      "US": 0,
+      "GB": 0,
+      "CA": 0,
+      "DE": 0,
+      "FR": 0,
+      "AU": 0,
+      "JP": 0,
+      "Unknown": 0
+    },
+    versionsByMonth: {
+      [currentMonthKey]: {
+        "0.0.0": 0
+      }
+    },
+    osByMonth: {
+      [currentMonthKey]: {
+        "darwin-arm64": 0,
+        "darwin-x64": 0,
+        "win32-x64": 0,
+        "win32-arm64": 0,
+        "linux-x64": 0,
+        "linux-arm64": 0,
+        "Unknown": 0
+      }
+    },
+    geoByMonth: {
+      [currentMonthKey]: {
+        "US": 0,
+        "GB": 0,
+        "CA": 0,
+        "DE": 0,
+        "FR": 0,
+        "AU": 0,
+        "JP": 0,
+        "Unknown": 0
+      }
+    }
   };
 }
 
