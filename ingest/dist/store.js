@@ -34,6 +34,8 @@ function readStore() {
         obj.byOs = obj.byOs || {};
         obj.byCountry = obj.byCountry || {};
         obj.versionsByMonth = obj.versionsByMonth || {};
+        obj.osByMonth = obj.osByMonth || {};
+        obj.geoByMonth = obj.geoByMonth || {};
         obj.meta = obj.meta || { createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
         return obj;
     }
