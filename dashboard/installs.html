@@ -569,6 +569,82 @@
         </div>
       </div>
 
+      <!-- Enhanced Analytics Section - NEW -->
+      <div class="section-header" style="margin: 3rem 0 2rem;">
+        <h2 style="font-size: 1.5rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0.5rem;">
+          📊 Enhanced Analytics
+        </h2>
+        <p style="color: var(--text-secondary); font-size: 0.875rem;">
+          User retention, upgrade patterns, and usage insights
+        </p>
+      </div>
+
+      <!-- Retention and Upgrade Stats -->
+      <div class="stats-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 2.5rem;">
+        <div class="stat-card">
+          <div class="stat-value" id="retentionGrade">N/A</div>
+          <div class="stat-label">Retention Grade</div>
+          <div class="stat-info" id="retentionInfo">Overall user retention score</div>
+        </div>
+        
+        <div class="stat-card">
+          <div class="stat-value" id="upgradeTotal">0</div>
+          <div class="stat-label">Total Upgrades</div>
+          <div class="stat-info" id="upgradeRate">0% of users upgrade</div>
+        </div>
+        
+        <div class="stat-card">
+          <div class="stat-value" id="usageTotal">0</div>
+          <div class="stat-label">Java Executions</div>
+          <div class="stat-info" id="usageEngagement">Usage per user</div>
+        </div>
+        
+        <div class="stat-card">
+          <div class="stat-value" id="themeChanges">0</div>
+          <div class="stat-label">Theme Changes</div>
+          <div class="stat-info" id="themeInfo">User customizations</div>
+        </div>
+      </div>
+
+      <!-- Enhanced Analytics Charts -->
+      <div class="charts-grid">
+        <div class="chart-card">
+          <div class="chart-header">
+            <div>
+              <div class="chart-title">Extension Upgrades Timeline</div>
+              <div class="chart-subtitle">User retention through version upgrades</div>
+            </div>
+          </div>
+          <div class="chart-container">
+            <canvas id="upgradeTimelineChart"></canvas>
+          </div>
+        </div>
+
+        <div class="chart-card">
+          <div class="chart-header">
+            <div>
+              <div class="chart-title">Usage Activity</div>
+              <div class="chart-subtitle">Java runs and theme changes over time</div>
+            </div>
+          </div>
+          <div class="chart-container">
+            <canvas id="usageActivityChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="chart-card" style="margin-bottom: 2.5rem;">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">User Engagement Analysis</div>
+            <div class="chart-subtitle">Correlation between installs, upgrades, and active usage</div>
+          </div>
+        </div>
+        <div class="chart-container large">
+          <canvas id="engagementChart"></canvas>
+        </div>
+      </div>
+
       <!-- Advanced Analytics Section -->
       <div class="charts-grid">
         <div class="chart-card">
@@ -1488,8 +1564,181 @@
         // Country table
         updateCountryTable(byCountry, installsTotal);
 
+        // Enhanced Analytics Processing - NEW
+        renderEnhancedAnalytics(data);
+
         // Advanced Analytics Charts
         renderAdvancedAnalytics(data);
+      }
+
+      // Enhanced Analytics Processing - NEW
+      function renderEnhancedAnalytics(data) {
+        console.log('Rendering enhanced analytics with data:', data);
+        
+        // Extract enhanced analytics data
+        const upgradeAnalytics = data.upgradeAnalytics || { total: 0, upgradeRate: 0, avgPerMonth: 0 };
+        const usageAnalytics = data.usageAnalytics || { javaRuns: { total: 0, engagementRate: 0 }, themeChanges: { total: 0 } };
+        const retentionMetrics = data.retentionMetrics || { overallRetention: 0, retentionGrade: 'N/A', avgRunsPerUser: 0 };
+        
+        // Update stats cards
+        document.getElementById('retentionGrade').textContent = retentionMetrics.retentionGrade;
+        document.getElementById('retentionInfo').textContent = `${retentionMetrics.overallRetention}% overall retention`;
+        
+        document.getElementById('upgradeTotal').textContent = formatNumber(upgradeAnalytics.total);
+        document.getElementById('upgradeRate').textContent = `${upgradeAnalytics.upgradeRate}% of users upgrade`;
+        
+        document.getElementById('usageTotal').textContent = formatNumber(usageAnalytics.javaRuns.total);
+        document.getElementById('usageEngagement').textContent = `${retentionMetrics.avgRunsPerUser} runs per user`;
+        
+        document.getElementById('themeChanges').textContent = formatNumber(usageAnalytics.themeChanges.total);
+        document.getElementById('themeInfo').textContent = 'User customizations';
+
+        // Enhanced Analytics Charts
+        
+        // 1. Upgrade Timeline Chart
+        if (upgradeAnalytics.months && upgradeAnalytics.timeline) {
+          createOrUpdateChart('#upgradeTimelineChart', {
+            type: 'line',
+            data: {
+              labels: upgradeAnalytics.months,
+              datasets: [{
+                label: 'Monthly Upgrades',
+                data: upgradeAnalytics.timeline,
+                borderColor: colors.secondary,
+                backgroundColor: colors.secondary + '20',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.3,
+                pointRadius: 3,
+                pointHoverRadius: 5,
+                pointBackgroundColor: colors.secondary,
+                pointBorderColor: colors.text,
+                pointBorderWidth: 1
+              }]
+            },
+            options: {
+              ...commonOptions,
+              plugins: {
+                ...commonOptions.plugins,
+                legend: { display: false },
+                title: {
+                  display: true,
+                  text: `Total: ${upgradeAnalytics.total} upgrades • ${upgradeAnalytics.retentionIndicator} retention`,
+                  color: colors.textSecondary,
+                  font: { size: 12 }
+                }
+              }
+            }
+          });
+        }
+
+        // 2. Usage Activity Chart
+        if (usageAnalytics.months) {
+          const datasets = [];
+          
+          if (usageAnalytics.javaRuns.timeline) {
+            datasets.push({
+              label: 'Java Runs',
+              data: usageAnalytics.javaRuns.timeline,
+              borderColor: colors.accent,
+              backgroundColor: colors.accent + '20',
+              borderWidth: 2,
+              fill: false,
+              tension: 0.3,
+              pointRadius: 2,
+              pointHoverRadius: 4
+            });
+          }
+          
+          if (usageAnalytics.themeChanges.timeline) {
+            datasets.push({
+              label: 'Theme Changes',
+              data: usageAnalytics.themeChanges.timeline,
+              borderColor: colors.tertiary,
+              backgroundColor: colors.tertiary + '20',
+              borderWidth: 2,
+              fill: false,
+              tension: 0.3,
+              pointRadius: 2,
+              pointHoverRadius: 4
+            });
+          }
+
+          createOrUpdateChart('#usageActivityChart', {
+            type: 'line',
+            data: {
+              labels: usageAnalytics.months,
+              datasets: datasets
+            },
+            options: {
+              ...commonOptions,
+              plugins: {
+                ...commonOptions.plugins,
+                legend: { 
+                  display: true,
+                  position: 'top',
+                  labels: {
+                    color: colors.textSecondary,
+                    font: { family: 'Inter', size: 11 },
+                    usePointStyle: true,
+                    padding: 15
+                  }
+                }
+              }
+            }
+          });
+        }
+
+        // 3. Engagement Correlation Chart
+        const totalInstalls = data.installsTotal || 0;
+        const engagementData = [
+          { label: 'Installs', value: totalInstalls, color: colors.primary },
+          { label: 'Upgrades', value: upgradeAnalytics.total, color: colors.secondary },
+          { label: 'Java Runs', value: usageAnalytics.javaRuns.total, color: colors.accent },
+          { label: 'Theme Changes', value: usageAnalytics.themeChanges.total, color: colors.tertiary }
+        ];
+
+        createOrUpdateChart('#engagementChart', {
+          type: 'bar',
+          data: {
+            labels: engagementData.map(d => d.label),
+            datasets: [{
+              label: 'Count',
+              data: engagementData.map(d => d.value),
+              backgroundColor: engagementData.map(d => d.color + '80'),
+              borderColor: engagementData.map(d => d.color),
+              borderWidth: 2,
+              borderRadius: 6,
+              borderSkipped: false
+            }]
+          },
+          options: {
+            ...commonOptions,
+            plugins: {
+              ...commonOptions.plugins,
+              legend: { display: false },
+              title: {
+                display: true,
+                text: `Retention Grade: ${retentionMetrics.retentionGrade} • Engagement Rate: ${usageAnalytics.javaRuns.engagementRate} runs/user`,
+                color: colors.textSecondary,
+                font: { size: 12 }
+              }
+            },
+            scales: {
+              ...commonOptions.scales,
+              y: {
+                ...commonOptions.scales.y,
+                type: 'logarithmic',
+                ticks: {
+                  ...commonOptions.scales.y.ticks,
+                  callback: function(value) {
+                    return formatNumber(value);
+                  }
+                }
+              }
+            }
+          }
+        });
       }
 
       // Fixed advanced analytics charts
