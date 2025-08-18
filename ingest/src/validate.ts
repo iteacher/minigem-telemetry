@@ -1,6 +1,8 @@
 const EVENTS = new Set([
   'install.created',
-  'extension.upgraded'
+  'extension.upgraded',
+  'java.run.started',
+  'feature.theme.change'
 ]);
 
 export function validateEnvelope(body: any): body is { schema: string; sentAt: number; batch: any[] } {

@@ -6,6 +6,25 @@ import { CONFIG } from './config.js';
 type Store = {
   meta: { createdAt: string; updatedAt: string };
   months: Record<string /*year*/, Record<string /*mm*/, { installs: number }>>;
+  
+  // NEW: Track extension upgrades separately
+  upgrades: {
+    total: number;
+    months: Record<string /*year*/, Record<string /*mm*/, { upgrades: number }>>;
+  };
+  
+  // NEW: Track usage events
+  usage: {
+    javaRuns: {
+      total: number;
+      months: Record<string /*YYYY-MM*/, { runs: number }>;
+    };
+    themeChanges: {
+      total: number;
+      months: Record<string /*YYYY-MM*/, { changes: number }>;
+    };
+  };
+
   byExt: Record<string, number>;
   byOs: Record<string, number>;
   byCountry: Record<string, number>;
@@ -37,6 +56,33 @@ function defaultStore(): Store {
         [currentMonth]: { installs: 0 }
       }
     },
+    
+    // NEW: Track extension upgrades separately
+    upgrades: {
+      total: 0,
+      months: {
+        [currentYear]: {
+          [currentMonth]: { upgrades: 0 }
+        }
+      }
+    },
+    
+    // NEW: Track usage events
+    usage: {
+      javaRuns: {
+        total: 0,
+        months: {
+          [currentMonthKey]: { runs: 0 }
+        }
+      },
+      themeChanges: {
+        total: 0,
+        months: {
+          [currentMonthKey]: { changes: 0 }
+        }
+      }
+    },
+
     byExt: {
       "0.0.0": 0
     },
@@ -105,6 +151,24 @@ function readStore(): Store {
     obj.osByMonth = obj.osByMonth || {};
     obj.geoByMonth = obj.geoByMonth || {};
     obj.meta = obj.meta || { createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    
+    // NEW: Ensure upgrade and usage structures exist
+    obj.upgrades = obj.upgrades || {
+      total: 0,
+      months: {}
+    };
+    
+    obj.usage = obj.usage || {
+      javaRuns: {
+        total: 0,
+        months: {}
+      },
+      themeChanges: {
+        total: 0,
+        months: {}
+      }
+    };
+    
     return obj as Store;
   } catch {
     return defaultStore();
@@ -137,7 +201,7 @@ export async function storeUpsertInstall(ev: any, geo?: { country?: string }) {
     const nowIso = new Date().toISOString();
 
     const evt = String(ev.evt || '');
-    if (evt !== 'install.created' && evt !== 'extension.upgraded') return;
+    if (!['install.created', 'extension.upgraded', 'java.run.started', 'feature.theme.change'].includes(evt)) return;
 
     const ext = String(ev.ext || '0.0.0');
     const os = String(ev.os || 'unknown');
@@ -150,11 +214,12 @@ export async function storeUpsertInstall(ev: any, geo?: { country?: string }) {
     const d = new Date(t);
     const y = String(d.getUTCFullYear());
     const m = String(d.getUTCMonth() + 1).padStart(2, '0');
-
-    // Always count version for both install and upgrade
-    store.byExt[ext] = (store.byExt[ext] || 0) + 1;
+    const monthKey = `${y}-${m}`;
 
     if (evt === 'install.created') {
+      // Count version for installs
+      store.byExt[ext] = (store.byExt[ext] || 0) + 1;
+
       // Increment monthly installs
       if (!store.months[y]) store.months[y] = {};
       if (!store.months[y][m]) store.months[y][m] = { installs: 0 };
@@ -164,18 +229,51 @@ export async function storeUpsertInstall(ev: any, geo?: { country?: string }) {
       store.byOs[os] = (store.byOs[os] || 0) + 1;
       store.byCountry[country] = (store.byCountry[country] || 0) + 1;
 
-      // NEW: Track version installs by month
-      const monthKey = `${y}-${m}`;
+      // Track version installs by month
       if (!store.versionsByMonth[monthKey]) store.versionsByMonth[monthKey] = {};
       store.versionsByMonth[monthKey][ext] = (store.versionsByMonth[monthKey][ext] || 0) + 1;
 
-      // NEW: Track OS installs by month
+      // Track OS installs by month
       if (!store.osByMonth[monthKey]) store.osByMonth[monthKey] = {};
       store.osByMonth[monthKey][os] = (store.osByMonth[monthKey][os] || 0) + 1;
 
-      // NEW: Track geographic installs by month
+      // Track geographic installs by month
       if (!store.geoByMonth[monthKey]) store.geoByMonth[monthKey] = {};
       store.geoByMonth[monthKey][country] = (store.geoByMonth[monthKey][country] || 0) + 1;
+
+    } else if (evt === 'extension.upgraded') {
+      // Track extension upgrades
+      store.upgrades.total++;
+      
+      // Ensure upgrade month structure exists
+      if (!store.upgrades.months[y]) {
+        store.upgrades.months[y] = {};
+      }
+      if (!store.upgrades.months[y][m]) {
+        store.upgrades.months[y][m] = { upgrades: 0 };
+      }
+      store.upgrades.months[y][m].upgrades++;
+
+      // Also count version for upgrades (user retention tracking)
+      store.byExt[ext] = (store.byExt[ext] || 0) + 1;
+
+    } else if (evt === 'java.run.started') {
+      // Track Java execution usage
+      store.usage.javaRuns.total++;
+      
+      if (!store.usage.javaRuns.months[monthKey]) {
+        store.usage.javaRuns.months[monthKey] = { runs: 0 };
+      }
+      store.usage.javaRuns.months[monthKey].runs++;
+
+    } else if (evt === 'feature.theme.change') {
+      // Track theme change usage
+      store.usage.themeChanges.total++;
+      
+      if (!store.usage.themeChanges.months[monthKey]) {
+        store.usage.themeChanges.months[monthKey] = { changes: 0 };
+      }
+      store.usage.themeChanges.months[monthKey].changes++;
     }
 
     store.meta.updatedAt = nowIso;
@@ -233,6 +331,10 @@ export function storeReadInstallStats(windowMonths = 12) {
     versionMigration: generateVersionMigration(s),
     growthTrajectory: generateGrowthTrajectory(s),
     platformTrends: generatePlatformTrends(s),
+    // NEW: Enhanced Analytics for Retention and Usage
+    upgradeAnalytics: generateUpgradeAnalytics(s),
+    usageAnalytics: generateUsageAnalytics(s),
+    retentionMetrics: generateRetentionMetrics(s),
     updatedAt: s.meta.updatedAt,
     file: FILE
   };
@@ -593,6 +695,143 @@ function generatePlatformTrends(s: Store) {
   });
   
   return trends;
+}
+
+// NEW: Generate upgrade analytics
+function generateUpgradeAnalytics(s: Store) {
+  if (!s.upgrades) return { total: 0, months: [], timeline: [] };
+  
+  // Get all months for upgrade timeline
+  const allMonths: string[] = [];
+  const years = Object.keys(s.months).sort();
+  for (const y of years) {
+    const monthsInYear = Object.keys(s.months[y] || {}).sort();
+    for (const m of monthsInYear) {
+      allMonths.push(`${y}-${m}`);
+    }
+  }
+  
+  // Build upgrade timeline
+  const upgradeTimeline = allMonths.map(month => {
+    const [year, monthNum] = month.split('-');
+    return s.upgrades.months[year]?.[monthNum]?.upgrades || 0;
+  });
+  
+  // Calculate upgrade statistics
+  const totalUpgrades = s.upgrades.total;
+  const avgUpgradesPerMonth = upgradeTimeline.length > 0 ? 
+    Math.round((totalUpgrades / upgradeTimeline.length) * 10) / 10 : 0;
+  
+  // Calculate upgrade rate vs installs
+  const totalInstalls = Object.values(s.byExt).reduce((a, b) => a + b, 0);
+  const upgradeRate = totalInstalls > 0 ? 
+    Math.round((totalUpgrades / totalInstalls) * 1000) / 10 : 0;
+  
+  return {
+    total: totalUpgrades,
+    avgPerMonth: avgUpgradesPerMonth,
+    upgradeRate: upgradeRate, // percentage of users who upgrade
+    months: allMonths,
+    timeline: upgradeTimeline,
+    retentionIndicator: upgradeRate > 50 ? 'High' : upgradeRate > 25 ? 'Medium' : 'Low'
+  };
+}
+
+// NEW: Generate usage analytics
+function generateUsageAnalytics(s: Store) {
+  if (!s.usage) return { javaRuns: { total: 0 }, themeChanges: { total: 0 } };
+  
+  // Get all months for timeline
+  const allMonths: string[] = [];
+  const years = Object.keys(s.months).sort();
+  for (const y of years) {
+    const monthsInYear = Object.keys(s.months[y] || {}).sort();
+    for (const m of monthsInYear) {
+      allMonths.push(`${y}-${m}`);
+    }
+  }
+  
+  // Java runs analytics
+  const javaRunsTimeline = allMonths.map(month => 
+    s.usage.javaRuns.months[month]?.runs || 0
+  );
+  
+  const avgJavaRunsPerMonth = javaRunsTimeline.length > 0 ? 
+    Math.round((s.usage.javaRuns.total / javaRunsTimeline.length) * 10) / 10 : 0;
+  
+  // Theme changes analytics
+  const themeChangesTimeline = allMonths.map(month => 
+    s.usage.themeChanges.months[month]?.changes || 0
+  );
+  
+  const avgThemeChangesPerMonth = themeChangesTimeline.length > 0 ? 
+    Math.round((s.usage.themeChanges.total / themeChangesTimeline.length) * 10) / 10 : 0;
+  
+  // Calculate engagement metrics
+  const totalInstalls = Object.values(s.byExt).reduce((a, b) => a + b, 0);
+  const javaEngagementRate = totalInstalls > 0 ? 
+    Math.round((s.usage.javaRuns.total / totalInstalls) * 10) / 10 : 0;
+  
+  return {
+    javaRuns: {
+      total: s.usage.javaRuns.total,
+      avgPerMonth: avgJavaRunsPerMonth,
+      timeline: javaRunsTimeline,
+      engagementRate: javaEngagementRate // runs per user
+    },
+    themeChanges: {
+      total: s.usage.themeChanges.total,
+      avgPerMonth: avgThemeChangesPerMonth,
+      timeline: themeChangesTimeline
+    },
+    months: allMonths,
+    totalUsageEvents: s.usage.javaRuns.total + s.usage.themeChanges.total
+  };
+}
+
+// NEW: Generate retention metrics
+function generateRetentionMetrics(s: Store) {
+  const totalInstalls = Object.values(s.byExt).reduce((a, b) => a + b, 0);
+  
+  if (!s.upgrades || !s.usage || totalInstalls === 0) {
+    return {
+      upgradeRetention: 0,
+      usageRetention: 0,
+      overallRetention: 0,
+      retentionGrade: 'N/A'
+    };
+  }
+  
+  // Calculate different retention metrics
+  const upgradeRetention = Math.round((s.upgrades.total / totalInstalls) * 1000) / 10;
+  const usageRetention = Math.round(((s.usage.javaRuns.total > 0 ? 1 : 0) * totalInstalls / totalInstalls) * 1000) / 10;
+  
+  // Overall retention score (weighted average)
+  const overallRetention = Math.round(((upgradeRetention * 0.6) + (usageRetention * 0.4)) * 10) / 10;
+  
+  // Retention grade
+  let retentionGrade = 'F';
+  if (overallRetention >= 80) retentionGrade = 'A';
+  else if (overallRetention >= 65) retentionGrade = 'B';
+  else if (overallRetention >= 50) retentionGrade = 'C';
+  else if (overallRetention >= 35) retentionGrade = 'D';
+  
+  // Additional metrics
+  const avgRunsPerUser = totalInstalls > 0 ? 
+    Math.round((s.usage.javaRuns.total / totalInstalls) * 10) / 10 : 0;
+  
+  return {
+    upgradeRetention,
+    usageRetention,
+    overallRetention,
+    retentionGrade,
+    avgRunsPerUser,
+    activeUserIndicators: {
+      hasUpgrades: s.upgrades.total > 0,
+      hasUsage: s.usage.javaRuns.total > 0,
+      highEngagement: avgRunsPerUser > 10
+    }
+  };
 }
 
 export function pathToStore() { return FILE; }
