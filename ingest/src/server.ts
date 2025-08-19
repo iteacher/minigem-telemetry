@@ -192,16 +192,20 @@ async function main() {
   });
 
   try {
-    // Check if we're running under Passenger (no port env vars means Passenger handles HTTP directly)
-    const isPassenger = Object.keys(process.env).length > 0 && 
-                       !process.env.PORT && 
+    // Passenger detection: look for .htaccess config or specific env patterns
+    const isPassenger = !process.env.PORT && 
                        !process.env.PASSENGER_PORT &&
-                       process.env.PWD && process.env.PWD.includes('telemetary.jwc.minigem.uk');
+                       (process.env.PWD?.includes('telemetary.jwc.minigem.uk') || 
+                        process.env.DOCUMENT_ROOT || 
+                        process.env.SCRIPT_NAME !== undefined);
     
     if (isPassenger) {
-      log.info('boot.passenger.detected', 'Passenger mode - HTTP handled directly');
-      // In Passenger mode, we don't bind to a port - Passenger handles HTTP routing
-      log.info('boot.passenger.ready', { appRoot: process.env.PWD });
+      log.info('boot.passenger.detected', 'Passenger mode - skipping port binding');
+      // In Passenger, we still need to call listen but Passenger will handle the actual port
+      // Use a random high port that Passenger will override
+      const passengerPort = 0; // Let system assign
+      await app.listen({ port: passengerPort, host: '0.0.0.0' });
+      log.info('boot.passenger.ready', { mode: 'passenger', assignedPort: app.server.address() });
     } else {
       log.info('boot.listen.start', { port: CONFIG.PORT, host: '0.0.0.0' });
       await app.listen({ port: CONFIG.PORT, host: '0.0.0.0' });
