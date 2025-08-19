@@ -1,0 +1,91 @@
+{
+  "meta": {
+    "createdAt": "2025-08-18T14:00:00.000Z",
+    "updatedAt": "2025-08-18T14:00:00.000Z"
+  },
+  "months": {
+    "2025": {
+      "08": {
+        "installs": 0
+      }
+    }
+  },
+  "upgrades": {
+    "total": 0,
+    "months": {
+      "2025": {
+        "08": {
+          "upgrades": 0
+        }
+      }
+    }
+  },
+  "usage": {
+    "javaRuns": {
+      "total": 0,
+      "months": {
+        "2025-08": {
+          "runs": 0
+        }
+      }
+    },
+    "themeChanges": {
+      "total": 0,
+      "months": {
+        "2025-08": {
+          "changes": 0
+        }
+      }
+    }
+  },
+  "byExt": {
+    "0.0.0": 0
+  },
+  "byOs": {
+    "darwin-arm64": 0,
+    "darwin-x64": 0,
+    "win32-x64": 0,
+    "win32-arm64": 0,
+    "linux-x64": 0,
+    "linux-arm64": 0,
+    "Unknown": 0
+  },
+  "byCountry": {
+    "US": 0,
+    "GB": 0,
+    "CA": 0,
+    "DE": 0,
+    "FR": 0,
+    "AU": 0,
+    "JP": 0,
+    "Unknown": 0
+  },
+  "versionsByMonth": {
+    "2025-08": {
+      "0.0.0": 0
+    }
+  },
+  "osByMonth": {
+    "2025-08": {
+      "darwin-arm64": 0,
+      "darwin-x64": 0,
+      "win32-x64": 0,
+      "win32-arm64": 0,
+      "linux-x64": 0,
+      "linux-arm64": 0,
+      "Unknown": 0
+    }
+  },
+  "geoByMonth": {
+    "2025-08": {
+      "US": 0,
+      "GB": 0,
+      "CA": 0,
+      "DE": 0,
+      "FR": 0,
+      "AU": 0,
+      "JP": 0,
+      "Unknown": 0
+    }
+  }
+}

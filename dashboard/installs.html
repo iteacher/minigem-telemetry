@@ -808,8 +808,178 @@
         return new Intl.NumberFormat().format(num);
       }
 
-      function calculatePercentage(value, total) {
-        return total > 0 ? ((value / total) * 100).toFixed(1) : '0.0';
+      function calculatePercentage(value, total, minDisplayThreshold = 0.1) {
+        const percentage = total > 0 ? ((value / total) * 100) : 0;
+        return percentage < minDisplayThreshold && percentage > 0 ? '<0.1' : percentage.toFixed(1);
+      }
+
+      // Helper functions for small dataset handling
+      function filterZeroValues(data, minValue = 1) {
+        return Object.entries(data)
+          .filter(([key, value]) => value >= minValue)
+          .reduce((obj, [key, value]) => ({ ...obj, [key]: value }), {});
+      }
+
+      function getTopEntries(data, maxEntries = 8, minValue = 0) {
+        return Object.entries(data)
+          .filter(([key, value]) => value >= minValue)
+          .sort(([,a], [,b]) => b - a)
+          .slice(0, maxEntries);
+      }
+
+      // Allocate an integer distribution proportional to weights, preserving the total
+      function allocateProportional(total, weights) {
+        const sum = (weights || []).reduce((a, b) => a + (Number.isFinite(b) ? b : 0), 0);
+        if (!Number.isFinite(total) || total <= 0 || sum <= 0) {
+          return new Array((weights || []).length).fill(0);
+        }
+        const raw = weights.map(w => (w / sum) * total);
+        const base = raw.map(Math.floor);
+        let remaining = total - base.reduce((a, b) => a + b, 0);
+        const order = raw
+          .map((v, i) => ({ i, f: v - Math.floor(v) }))
+          .sort((a, b) => b.f - a.f);
+        for (let k = 0; k < order.length && remaining > 0; k++, remaining--) {
+          base[order[k].i] += 1;
+        }
+        return base;
+      }
+
+      function getSmartYAxisConfig(values, baseConfig) {
+        if (!values || values.length === 0) return baseConfig;
+        
+        const maxValue = Math.max(...values);
+        if (maxValue <= 10) {
+          const suggested = Math.max(3, Math.min(10, Math.ceil(maxValue + 1)));
+          return {
+            ...baseConfig,
+            suggestedMax: suggested,
+            ticks: {
+              ...baseConfig.ticks,
+              stepSize: 1,
+              precision: 0
+            }
+          };
+        }
+        
+        return baseConfig;
+      }
+
+      function shouldShowInsufficientDataMessage(canvasId, dataPoints, minRequired = 2) {
+        if (dataPoints >= minRequired) return false;
+        
+        const canvas = document.querySelector(canvasId);
+        if (canvas) {
+          const ctx = canvas.getContext('2d');
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = colors.textMuted;
+          ctx.font = '14px Inter';
+          ctx.textAlign = 'center';
+          ctx.fillText('Insufficient timeline data', canvas.width / 2, canvas.height / 2 - 10);
+          ctx.fillText(`(Need at least ${minRequired} data points)`, canvas.width / 2, canvas.height / 2 + 10);
+        }
+        return true;
+      }
+
+      // Adaptive timeline helper function (uses provided period to decide granularity)
+      function getAdaptiveTimelineData(monthlyData, monthLabels, period) {
+        const now = new Date();
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  let fromDate = period && period.from ? new Date(period.from) : null;
+  let toDate = period && period.to ? new Date(period.to) : null;
+  if (fromDate && isNaN(fromDate.getTime())) fromDate = null;
+  if (toDate && isNaN(toDate.getTime())) toDate = null;
+        const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        let spanDays = null;
+  if (fromDate && toDate) {
+          spanDays = Math.max(1, Math.floor((toDate - fromDate) / 86400000) + 1);
+        }
+
+        // Multiple months: weeks up to 30 weeks, else months
+        if (monthLabels.length > 1) {
+          const totalWeeks = spanDays ? Math.ceil(spanDays / 7) : Math.round(monthLabels.length * 4.33);
+          if (totalWeeks <= 30) {
+            const weekLabels = [];
+            const weekData = [];
+            monthLabels.forEach((month, monthIndex) => {
+              const [, monthNum] = month.split('-');
+              const monthName = monthNames[parseInt(monthNum, 10) - 1];
+              const monthlyTotal = monthlyData[monthIndex] || 0;
+              // Break each month into 4 weeks (approx), preserving total
+              const allocated = allocateProportional(monthlyTotal, [1,1,1,1]);
+              for (let w = 1; w <= 4; w++) {
+                weekLabels.push(`${monthName} W${w}`);
+                weekData.push(allocated[w - 1]);
+              }
+            });
+            return { labels: weekLabels, data: weekData, timeUnit: 'week', title: 'Weekly Timeline' };
+          }
+          return {
+            labels: monthLabels.map(m => {
+              const [y, mNum] = m.split('-');
+              return `${monthNames[parseInt(mNum, 10) - 1]} ${y}`;
+            }),
+            data: monthlyData,
+            timeUnit: 'month',
+            title: 'Monthly Timeline'
+          };
+        }
+
+        // Single month: decide first-week or first-month daily breakdown using spanDays
+        if (monthLabels.length === 1) {
+          const totalValue = monthlyData[0] || 0;
+          // If this is the current month or period is within one month
+          if (!spanDays && monthLabels[0] === currentMonth) {
+            // Fallback: use day of month when period is unknown
+            spanDays = now.getDate();
+          }
+
+          // First week view preference: if span unknown/<=7 or totals tiny (<=7), show a 7-day grid
+          if (!spanDays || spanDays <= 7 || totalValue <= 7) {
+            // Build 7 consecutive days starting at fromDate (or ending at toDate if fromDate is missing)
+            let start = fromDate ? new Date(fromDate) : (toDate ? new Date(toDate.getTime() - 6 * 86400000) : new Date(now.getTime() - 6 * 86400000));
+            const labels = [];
+            for (let i = 0; i < 7; i++) {
+              const d = new Date(start.getTime() + i * 86400000);
+              labels.push(`${monthNames[d.getMonth()]} ${d.getDate()}`);
+            }
+            const activeDays = Math.min(spanDays || 7, 7);
+            const weights = new Array(7).fill(0).map((_, i) => (i < activeDays ? 1 : 0));
+            const data7 = allocateProportional(totalValue, weights);
+            return { labels, data: data7, timeUnit: 'day', title: 'First 7 Days' };
+          }
+
+          // First month: show daily breakdown for the whole month range (up to current/toDate day)
+          if (!spanDays || spanDays <= 31) {
+            const ref = fromDate || now;
+            const y = ref.getFullYear();
+            const m = ref.getMonth();
+            const daysInMonth = new Date(y, m + 1, 0).getDate();
+            const startDay = fromDate ? fromDate.getDate() : 1;
+            const endDay = toDate ? toDate.getDate() : (monthLabels[0] === currentMonth ? now.getDate() : daysInMonth);
+            const dayCount = Math.max(1, endDay - startDay + 1);
+            const dailyLabels = [];
+            const dailyData = new Array(dayCount).fill(0);
+            for (let d = startDay; d <= endDay; d++) dailyLabels.push(`${monthNames[m]} ${d}`);
+            if (totalValue > 0) {
+              const weights = new Array(dayCount).fill(1);
+              const allocated = allocateProportional(totalValue, weights);
+              for (let i = 0; i < dayCount; i++) dailyData[i] = allocated[i];
+            }
+            return { labels: dailyLabels, data: dailyData, timeUnit: 'day', title: 'This Month to Date (Daily)' };
+          }
+        }
+
+        // Default monthly view
+        return {
+          labels: monthLabels.map(m => {
+            const [y, mNum] = m.split('-');
+            return `${monthNames[parseInt(mNum, 10) - 1]} ${y}`;
+          }),
+          data: monthlyData,
+          timeUnit: 'month',
+          title: monthLabels.length === 1 ? 'Launch Month' : 'Monthly Timeline'
+        };
       }
 
       async function loadData() {
@@ -917,21 +1087,37 @@
         // Create trend chart (small sparkline)
         // Removed - redundant with monthly chart
 
-        // Monthly installs chart
+        // Prefer server-provided daily timeline when present (launch window). Otherwise, use adaptive monthly timeline.
+        let adaptiveMonthly;
+        const singlePoint = (monthlyInstalls.counts || []).length <= 2;
+        if (data.dailyInstalls && Array.isArray(data.dailyInstalls.dates) && data.dailyInstalls.dates.length > 0) {
+          adaptiveMonthly = {
+            labels: data.dailyInstalls.dates,
+            data: data.dailyInstalls.counts,
+            timeUnit: 'day',
+            title: 'Daily Installs (Launch Window)'
+          };
+        } else {
+          const monthlyValues = monthlyInstalls.counts || [];
+          const monthlyMonths = monthlyInstalls.months || [];
+          adaptiveMonthly = getAdaptiveTimelineData(monthlyValues, monthlyMonths, { from, to });
+        }
+        
         createOrUpdateChart('#monthlyChart', {
           type: 'line',
           data: {
-            labels: monthlyInstalls.months,
+            labels: adaptiveMonthly.labels,
             datasets: [{
-              label: 'Monthly Installs',
-              data: monthlyInstalls.counts,
+              label: adaptiveMonthly.timeUnit === 'day' ? 'Daily Installs' : 
+                     adaptiveMonthly.timeUnit === 'week' ? 'Weekly Installs' : 'Monthly Installs',
+              data: adaptiveMonthly.data,
               borderColor: colors.primary,
               backgroundColor: colors.primary + '15',
               borderWidth: 2,
-              fill: true,
-              tension: 0.3,
-              pointRadius: 0,
-              pointHoverRadius: 4,
+              fill: !singlePoint && adaptiveMonthly.timeUnit !== 'day',
+              tension: adaptiveMonthly.timeUnit === 'day' ? 0.1 : 0.3,
+              pointRadius: adaptiveMonthly.timeUnit === 'day' ? 6 : (singlePoint ? 6 : 0),
+              pointHoverRadius: adaptiveMonthly.timeUnit === 'day' ? 8 : (singlePoint ? 8 : 4),
               pointBackgroundColor: colors.primary,
               pointBorderColor: colors.text,
               pointBorderWidth: 1
@@ -943,6 +1129,28 @@
             plugins: {
               ...commonOptions.plugins,
               legend: { display: false }
+            },
+            scales: {
+              ...commonOptions.scales,
+              y: {
+                ...getSmartYAxisConfig(adaptiveMonthly.data, commonOptions.scales.y),
+                title: {
+                  display: true,
+                  text: adaptiveMonthly.timeUnit === 'day' ? 'Daily Installs' : 
+                        adaptiveMonthly.timeUnit === 'week' ? 'Weekly Installs' : 'Monthly Installs',
+                  color: colors.textMuted,
+                  font: { family: 'Inter', size: 12 }
+                }
+              },
+              x: {
+                ...commonOptions.scales.x,
+                title: {
+                  display: true,
+                  text: adaptiveMonthly.title,
+                  color: colors.textMuted,
+                  font: { family: 'Inter', size: 12 }
+                }
+              }
             }
           }
         });
@@ -950,171 +1158,208 @@
         // OS distribution - separate main platforms from architectures
         const mainPlatforms = ['Windows', 'macOS', 'Linux'];
         const osEntries = Object.entries(byOs);
-        const mainOs = osEntries.filter(([os]) => mainPlatforms.includes(os));
+        let mainOs = osEntries.filter(([os]) => mainPlatforms.includes(os));
         const archOs = osEntries.filter(([os]) => !mainPlatforms.includes(os));
 
-        createOrUpdateChart('#osChart', {
-          type: 'doughnut',
-          data: {
-            labels: mainOs.map(([os]) => os),
-            datasets: [{
-              data: mainOs.map(([, count]) => count),
-              backgroundColor: chartColors.slice(0, mainOs.length),
-              borderWidth: 3,
-              borderColor: '#334155',
-              hoverBorderWidth: 4
-            }]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: {
-                position: 'bottom',
-                labels: {
-                  color: colors.textSecondary,
-                  font: { family: 'Inter', size: 12 },
-                  usePointStyle: true,
-                  padding: 20
-                }
-              }
+        // Fallback: aggregate architectures into main OS if no direct main OS keys exist
+        let filteredMainOs = mainOs.filter(([, count]) => count > 0);
+        if (filteredMainOs.length === 0 && osEntries.length > 0) {
+          const agg = { Windows: 0, macOS: 0, Linux: 0 };
+          osEntries.forEach(([k, v]) => {
+            const l = (k || '').toLowerCase();
+            if (l.includes('win')) agg.Windows += v || 0;
+            else if (l.includes('darwin') || l.includes('mac')) agg.macOS += v || 0;
+            else if (l.includes('linux')) agg.Linux += v || 0;
+          });
+          filteredMainOs = Object.entries(agg).filter(([, count]) => count > 0);
+          // ensure mainOs for later reference
+          mainOs = filteredMainOs;
+        }
+
+        if (filteredMainOs.length > 0) {
+          createOrUpdateChart('#osChart', {
+            type: 'doughnut',
+            data: {
+              labels: filteredMainOs.map(([os]) => os),
+              datasets: [{
+                data: filteredMainOs.map(([, count]) => count),
+                backgroundColor: chartColors.slice(0, filteredMainOs.length),
+                borderWidth: 2,
+                borderColor: '#334155',
+                hoverBorderWidth: 3
+              }]
             },
-            cutout: '60%'
-          }
-        });
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: {
+                  position: 'bottom',
+                  labels: {
+                    color: colors.textSecondary,
+                    font: { family: 'Inter', size: 12 },
+                    usePointStyle: true,
+                    padding: 20,
+                    filter: function(legendItem, chartData) {
+                      return chartData.datasets[0].data[legendItem.datasetIndex] > 0;
+                    }
+                  }
+                }
+              },
+              cutout: '50%'
+            }
+          });
+        }
 
         // Architecture chart
-        createOrUpdateChart('#archChart', {
-          type: 'bar',
-          data: {
-            labels: archOs.slice(0, 8).map(([arch]) => arch),
-            datasets: [{
-              label: 'Installs',
-              data: archOs.slice(0, 8).map(([, count]) => count),
-              backgroundColor: chartColors[3] + '80',
-              borderColor: chartColors[3],
-              borderWidth: 2,
-              borderRadius: 6,
-              borderSkipped: false
-            }]
-          },
-          options: {
-            ...commonOptions,
-            plugins: {
-              ...commonOptions.plugins,
-              legend: { display: false }
-            },
-            scales: {
-              ...commonOptions.scales,
-              x: {
-                ...commonOptions.scales.x,
-                ticks: {
-                  ...commonOptions.scales.x.ticks,
-                  maxRotation: 45
-                }
-              }
-            }
-          }
-        });
-
-        // Extension versions chart
-        const extEntries = Object.entries(byExt)
-          .sort(([,a], [,b]) => b - a)
-          .slice(0, 15);
-
-        createOrUpdateChart('#versionsChart', {
-          type: 'bar',
-          data: {
-            labels: extEntries.map(([version]) => version),
-            datasets: [{
-              label: 'Installs',
-              data: extEntries.map(([, count]) => count),
-              backgroundColor: colors.secondary + '80',
-              borderColor: colors.secondary,
-              borderWidth: 2,
-              borderRadius: 6,
-              borderSkipped: false
-            }]
-          },
-          options: {
-            ...commonOptions,
-            plugins: {
-              ...commonOptions.plugins,
-              legend: { display: false }
-            },
-            scales: {
-              ...commonOptions.scales,
-              x: {
-                ...commonOptions.scales.x,
-                ticks: {
-                  ...commonOptions.scales.x.ticks,
-                  maxRotation: 45
-                }
-              }
-            }
-          }
-        });
-
-        // Version Timeline Chart - NEW
-        if (data.versionTimeline && data.versionTimeline.months && data.versionTimeline.months.length > 0) {
-          const timeline = data.versionTimeline;
-          const months = timeline.months || [];
-          const versions = timeline.versions || [];
-          const timelineData = timeline.data || {};
-          
-          const datasets = versions.map((version, index) => ({
-            label: version,
-            data: timelineData[version] || [],
-            borderColor: chartColors[index % chartColors.length],
-            backgroundColor: chartColors[index % chartColors.length] + '20',
-            borderWidth: 2,
-            fill: false,
-            tension: 0.3,
-            pointRadius: 2,
-            pointHoverRadius: 4
-          }));
-
-          createOrUpdateChart('#versionTimelineChart', {
-            type: 'line',
+        const filteredArchOs = archOs.filter(([arch, count]) => count > 0).slice(0, 8);
+        const archValues = filteredArchOs.map(([, count]) => count);
+        
+        if (filteredArchOs.length > 0) {
+          createOrUpdateChart('#archChart', {
+            type: 'bar',
             data: {
-              labels: months,
-              datasets: datasets
+              labels: filteredArchOs.map(([arch]) => arch),
+              datasets: [{
+                label: 'Installs',
+                data: archValues,
+                backgroundColor: chartColors[3] + '80',
+                borderColor: chartColors[3],
+                borderWidth: 2,
+                borderRadius: 6,
+                borderSkipped: false,
+                minBarLength: Math.max(...archValues) <= 5 ? 15 : 0
+              }]
             },
             options: {
               ...commonOptions,
               plugins: {
                 ...commonOptions.plugins,
-                legend: {
-                  display: true,
-                  position: 'top',
-                  labels: {
-                    color: colors.textSecondary,
-                    font: { family: 'Inter', size: 11 },
-                    usePointStyle: true,
-                    padding: 15
-                  }
-                }
+                legend: { display: false }
               },
               scales: {
                 ...commonOptions.scales,
-                y: {
-                  ...commonOptions.scales.y,
-                  title: {
-                    display: true,
-                    text: 'Monthly Installs',
-                    color: colors.textMuted,
-                    font: { family: 'Inter', size: 12 }
-                  }
-                },
                 x: {
                   ...commonOptions.scales.x,
-                  title: {
-                    display: true,
-                    text: 'Timeline',
-                    color: colors.textMuted,
-                    font: { family: 'Inter', size: 12 }
+                  ticks: {
+                    ...commonOptions.scales.x.ticks,
+                    maxRotation: 45
                   }
+                },
+                y: getSmartYAxisConfig(archValues, commonOptions.scales.y)
+              }
+            }
+          });
+        }
+
+        // Extension versions chart
+        const extEntries = Object.entries(byExt)
+          .filter(([version, count]) => count > 0)
+          .sort(([,a], [,b]) => b - a)
+          .slice(0, 15);
+        
+        const extValues = extEntries.map(([, count]) => count);
+
+        if (extEntries.length > 0) {
+          createOrUpdateChart('#versionsChart', {
+            type: 'bar',
+            data: {
+              labels: extEntries.map(([version]) => version),
+              datasets: [{
+                label: 'Installs',
+                data: extValues,
+                backgroundColor: colors.secondary + '80',
+                borderColor: colors.secondary,
+                borderWidth: 2,
+                borderRadius: 6,
+                borderSkipped: false,
+                minBarLength: Math.max(...extValues) <= 5 ? 15 : 0
+              }]
+            },
+            options: {
+              ...commonOptions,
+              plugins: {
+                ...commonOptions.plugins,
+                legend: { display: false }
+              },
+              scales: {
+                ...commonOptions.scales,
+                x: {
+                  ...commonOptions.scales.x,
+                  ticks: {
+                    ...commonOptions.scales.x.ticks,
+                    maxRotation: 45
+                  }
+                },
+                y: getSmartYAxisConfig(extValues, commonOptions.scales.y)
+              }
+            }
+          });
+        }
+
+        // Version Timeline Chart - NEW
+        if (data.versionTimeline && data.versionTimeline.data && Object.keys(data.versionTimeline.data).length > 0) {
+          const versionTimeline = data.versionTimeline;
+          const isDaily = Array.isArray(versionTimeline.dates) && versionTimeline.dates.length > 0;
+          const labels = isDaily ? versionTimeline.dates : (versionTimeline.months || []);
+          const allVersions = versionTimeline.versions || [];
+
+          const versions = allVersions.filter(version => {
+            const vd = versionTimeline.data[version] || [];
+            return version !== '0.0.0' && vd.some(c => c > 0);
+          }).slice(0, 6);
+
+          const combined = labels.map((_, idx) => versions.reduce((sum, v) => sum + ((versionTimeline.data[v] || [])[idx] || 0), 0));
+          const adaptiveTimeline = isDaily ? { labels, data: combined, timeUnit: 'day', title: 'Daily Version Timeline' } : getAdaptiveTimelineData(combined, labels, { from, to });
+
+          const datasets = versions.map((version, index) => {
+            let versionData = [];
+            if (adaptiveTimeline.timeUnit === 'month') {
+              versionData = labels.map((label, idx) => (versionTimeline.data[version] || [])[idx] || 0);
+            } else if (isDaily) {
+              versionData = versionTimeline.data[version] || new Array(adaptiveTimeline.labels.length).fill(0);
+            } else {
+              const versionMonthlyTotals = labels.map((label, idx) => (versionTimeline.data[version] || [])[idx] || 0);
+              const totalVersionInstalls = versionMonthlyTotals.reduce((a, b) => a + b, 0);
+              if (adaptiveTimeline.timeUnit === 'day') {
+                const weights = adaptiveTimeline.data.map(v => Math.max(0, v));
+                versionData = allocateProportional(totalVersionInstalls, weights);
+                if (versionData.every(v => v === 0) && totalVersionInstalls > 0) {
+                  versionData = allocateProportional(totalVersionInstalls, new Array(adaptiveTimeline.labels.length).fill(1));
                 }
+              } else if (adaptiveTimeline.timeUnit === 'week') {
+                const weeklyData = [];
+                labels.forEach((label, monthIdx) => {
+                  const mTotal = versionMonthlyTotals[monthIdx] || 0;
+                  const allocated = allocateProportional(mTotal, [1,1,1,1]);
+                  allocated.forEach(v => weeklyData.push(v));
+                });
+                versionData = weeklyData;
+              }
+            }
+
+            return {
+              label: version,
+              data: versionData,
+              borderColor: chartColors[index % chartColors.length],
+              backgroundColor: chartColors[index % chartColors.length] + '20',
+              borderWidth: 2,
+              fill: false,
+              tension: 0.3,
+              pointRadius: adaptiveTimeline.timeUnit === 'day' ? 6 : (adaptiveTimeline.timeUnit === 'week' ? 4 : 3),
+              pointHoverRadius: adaptiveTimeline.timeUnit === 'day' ? 8 : (adaptiveTimeline.timeUnit === 'week' ? 6 : 5)
+            };
+          });
+
+          createOrUpdateChart('#versionTimelineChart', {
+            type: 'line',
+            data: { labels: adaptiveTimeline.labels, datasets },
+            options: {
+              ...commonOptions,
+              plugins: { ...commonOptions.plugins, legend: { display: true, position: 'top' } },
+              scales: {
+                ...commonOptions.scales,
+                y: { ...getSmartYAxisConfig(datasets.flatMap(ds => ds.data), commonOptions.scales.y) }
               },
               interaction: { intersect: false, mode: 'index' }
             }
@@ -1122,271 +1367,153 @@
         } else {
           // Fallback: Create simulated timeline from available data
           const months = monthlyInstalls.months || [];
-          const topVersions = Object.entries(byExt)
-            .sort(([,a], [,b]) => b - a)
-            .slice(0, 6)
-            .map(([version]) => version);
+          const topVersions = Object.entries(byExt).sort(([,a], [,b]) => b - a).slice(0, 6).map(([version]) => version);
 
-          // Simulate version adoption patterns
           const datasets = topVersions.map((version, index) => {
             const versionNumber = parseFloat(version.replace(/[^\d.]/g, ''));
             const isOlder = versionNumber < 2.0;
             const isMajor = version.includes('.0.0') || version.includes('.0');
-            
             const simulatedData = months.map((month, monthIndex) => {
               const monthsFromStart = monthIndex;
               const totalMonths = months.length;
-              
-              if (isOlder) {
-                // Older versions: high early, declining
-                return Math.max(0, Math.floor((byExt[version] || 0) * (1 - monthsFromStart / totalMonths) * (Math.random() * 0.4 + 0.8)));
-              } else if (isMajor) {
-                // Major versions: gradual adoption
-                return Math.floor((byExt[version] || 0) * (monthsFromStart / totalMonths) * (Math.random() * 0.3 + 0.85));
-              } else {
-                // Minor versions: quick peak then decline
-                const peakMonth = Math.floor(totalMonths * 0.7);
-                const distance = Math.abs(monthsFromStart - peakMonth);
-                return Math.floor((byExt[version] || 0) * Math.exp(-distance / 10) * (Math.random() * 0.2 + 0.9));
-              }
+              if (isOlder) return Math.max(0, Math.floor((byExt[version] || 0) * (1 - monthsFromStart / totalMonths) * (Math.random() * 0.4 + 0.8)));
+              if (isMajor) return Math.floor((byExt[version] || 0) * (monthsFromStart / totalMonths) * (Math.random() * 0.3 + 0.85));
+              const peakMonth = Math.floor(totalMonths * 0.7);
+              const distance = Math.abs(monthsFromStart - peakMonth);
+              return Math.floor((byExt[version] || 0) * Math.exp(-distance / 10) * (Math.random() * 0.2 + 0.9));
             });
 
-            return {
-              label: version,
-              data: simulatedData,
-              borderColor: chartColors[index % chartColors.length],
-              backgroundColor: chartColors[index % chartColors.length] + '20',
-              borderWidth: 2,
-              fill: false,
-              tension: 0.3,
-              pointRadius: 2,
-              pointHoverRadius: 4
-            };
+            return { label: version, data: simulatedData, borderColor: chartColors[index % chartColors.length], backgroundColor: chartColors[index % chartColors.length] + '20', borderWidth: 2, fill: false, tension: 0.3, pointRadius: 2, pointHoverRadius: 4 };
           });
 
-          createOrUpdateChart('#versionTimelineChart', {
-            type: 'line',
-            data: {
-              labels: months,
-              datasets: datasets
-            },
-            options: {
-              ...commonOptions,
-              plugins: {
-                ...commonOptions.plugins,
-                legend: {
-                  display: true,
-                  position: 'top',
-                  labels: {
-                    color: colors.textSecondary,
-                    font: { family: 'Inter', size: 11 },
-                    usePointStyle: true,
-                    padding: 15
-                  }
-                },
-                tooltip: {
-                  ...commonOptions.plugins.tooltip,
-                  callbacks: {
-                    afterTitle: () => '(Simulated data - install telemetry to track actual version adoption over time)'
-                  }
-                }
-              },
-              scales: {
-                ...commonOptions.scales,
-                y: {
-                  ...commonOptions.scales.y,
-                  title: {
-                    display: true,
-                    text: 'Monthly Installs (Simulated)',
-                    color: colors.textMuted,
-                    font: { family: 'Inter', size: 12 }
-                  }
-                },
-                x: {
-                  ...commonOptions.scales.x,
-                  title: {
-                    display: true,
-                    text: 'Timeline',
-                    color: colors.textMuted,
-                    font: { family: 'Inter', size: 12 }
-                  }
-                }
-              },
-              interaction: { intersect: false, mode: 'index' }
-            }
-          });
+          createOrUpdateChart('#versionTimelineChart', { type: 'line', data: { labels: months, datasets }, options: { ...commonOptions, interaction: { intersect: false, mode: 'index' } } });
         }
 
         // OS Timeline Chart - NEW
-        if (data.osTimeline && data.osTimeline.months && data.osTimeline.months.length > 0) {
+        if (data.osTimeline && data.osTimeline.data && Object.keys(data.osTimeline.data).length > 0) {
           const osTimeline = data.osTimeline;
-          const months = osTimeline.months || [];
-          const osTypes = osTimeline.osTypes || [];
-          const osTimelineData = osTimeline.data || {};
-          
-          const osDatasets = osTypes.map((osType, index) => ({
-            label: osType,
-            data: osTimelineData[osType] || [],
-            borderColor: chartColors[index % chartColors.length],
-            backgroundColor: chartColors[index % chartColors.length] + '20',
-            borderWidth: 2,
-            fill: false,
-            tension: 0.3,
-            pointRadius: 2,
-            pointHoverRadius: 4
-          }));
+          const isDailyOs = Array.isArray(osTimeline.dates) && osTimeline.dates.length > 0;
+          const labels = isDailyOs ? osTimeline.dates : (osTimeline.months || []);
+          const allOsTypes = osTimeline.osTypes || [];
 
-          createOrUpdateChart('#osTimelineChart', {
-            type: 'line',
-            data: {
-              labels: months,
-              datasets: osDatasets
-            },
-            options: {
-              ...commonOptions,
-              plugins: {
-                ...commonOptions.plugins,
-                legend: {
-                  display: true,
-                  position: 'top',
-                  labels: {
-                    color: colors.textSecondary,
-                    font: { family: 'Inter', size: 11 },
-                    usePointStyle: true,
-                    padding: 15
-                  }
-                }
-              },
-              scales: {
-                ...commonOptions.scales,
-                y: {
-                  ...commonOptions.scales.y,
-                  title: {
-                    display: true,
-                    text: 'Monthly Installs',
-                    color: colors.textMuted,
-                    font: { family: 'Inter', size: 12 }
-                  }
-                },
-                x: {
-                  ...commonOptions.scales.x,
-                  title: {
-                    display: true,
-                    text: 'Timeline',
-                    color: colors.textMuted,
-                    font: { family: 'Inter', size: 12 }
-                  }
-                }
-              },
-              interaction: { intersect: false, mode: 'index' }
+          const osTypes = allOsTypes.filter(osType => {
+            const od = osTimeline.data[osType] || [];
+            return osType !== 'Unknown' && od.some(c => c > 0);
+          }).slice(0, 6);
+
+          const combined = labels.map((_, idx) => osTypes.reduce((sum, ot) => sum + ((osTimeline.data[ot] || [])[idx] || 0), 0));
+          const adaptiveTimeline = isDailyOs ? { labels, data: combined, timeUnit: 'day', title: 'Daily OS Timeline' } : getAdaptiveTimelineData(combined, labels, { from, to });
+
+          const osDatasets = osTypes.map((osType, index) => {
+            let osData = [];
+            if (adaptiveTimeline.timeUnit === 'month') {
+              osData = labels.map((label, idx) => (osTimeline.data[osType] || [])[idx] || 0);
+            } else if (isDailyOs) {
+              osData = osTimeline.data[osType] || new Array(adaptiveTimeline.labels.length).fill(0);
+            } else {
+              const osMonthlyTotals = labels.map((label, idx) => (osTimeline.data[osType] || [])[idx] || 0);
+              const totalOsInstalls = osMonthlyTotals.reduce((a,b) => a + b, 0);
+              if (adaptiveTimeline.timeUnit === 'day') {
+                const weights = adaptiveTimeline.data.map(v => Math.max(0, v));
+                osData = allocateProportional(totalOsInstalls, weights);
+                if (osData.every(v => v === 0) && totalOsInstalls > 0) osData = allocateProportional(totalOsInstalls, new Array(adaptiveTimeline.labels.length).fill(1));
+              } else if (adaptiveTimeline.timeUnit === 'week') {
+                const weeklyData = [];
+                labels.forEach((label, monthIdx) => {
+                  const mTotal = osMonthlyTotals[monthIdx] || 0;
+                  const allocated = allocateProportional(mTotal, [1,1,1,1]);
+                  allocated.forEach(v => weeklyData.push(v));
+                });
+                osData = weeklyData;
+              }
             }
+
+            return { label: osType, data: osData, borderColor: chartColors[index % chartColors.length], backgroundColor: chartColors[index % chartColors.length] + '20', borderWidth: 2, fill: false, tension: 0.3, pointRadius: adaptiveTimeline.timeUnit === 'day' ? 6 : (adaptiveTimeline.timeUnit === 'week' ? 4 : 3), pointHoverRadius: adaptiveTimeline.timeUnit === 'day' ? 8 : (adaptiveTimeline.timeUnit === 'week' ? 6 : 5) };
           });
+
+          createOrUpdateChart('#osTimelineChart', { type: 'line', data: { labels: adaptiveTimeline.labels, datasets: osDatasets }, options: { ...commonOptions, interaction: { intersect: false, mode: 'index' } } });
         } else {
           // Fallback: Create simulated OS timeline from available data
           const months = monthlyInstalls.months || [];
           const osEntries = Object.entries(byOs).sort(([,a], [,b]) => b - a);
-          
           const osDatasets = osEntries.map(([osType, totalCount], index) => {
-            // Simulate OS adoption patterns - more stable than versions
             const simulatedData = months.map((month, monthIndex) => {
               const progress = monthIndex / months.length;
               const baseValue = totalCount / months.length;
               const seasonalVariation = Math.sin(monthIndex * 0.5) * 0.2 + 1;
-              const growthTrend = osType === 'win32' ? 1 + progress * 0.3 : 
-                                 osType === 'darwin' ? 1 + progress * 0.5 : 
-                                 1 + progress * 0.1;
+              const growthTrend = osType === 'win32' ? 1 + progress * 0.3 : osType === 'darwin' ? 1 + progress * 0.5 : 1 + progress * 0.1;
               return Math.floor(baseValue * seasonalVariation * growthTrend * (Math.random() * 0.3 + 0.85));
             });
+            return { label: osType, data: simulatedData, borderColor: chartColors[index % chartColors.length], backgroundColor: chartColors[index % chartColors.length] + '20', borderWidth: 2, fill: false, tension: 0.3, pointRadius: 2, pointHoverRadius: 4 };
+          });
+          createOrUpdateChart('#osTimelineChart', { type: 'line', data: { labels: months, datasets: osDatasets }, options: { ...commonOptions, interaction: { intersect: false, mode: 'index' } } });
+        }
 
+        // Geographic Timeline Chart - NEW
+        if (data.geoTimeline && data.geoTimeline.data && Object.keys(data.geoTimeline.data).length > 0) {
+          const geoTimeline = data.geoTimeline;
+          const months = geoTimeline.months || [];
+          const allCountries = geoTimeline.countries || [];
+          
+          // Filter countries that have actual data
+          const countries = allCountries.filter(country => {
+            const countryData = geoTimeline.data[country] || [];
+            return country !== 'Unknown' && countryData.some(count => count > 0);
+          }).slice(0, 6); // Top 6 countries with data
+          
+          // Get combined data for adaptive timeline
+          const combinedData = months.map((month, idx) => 
+            countries.reduce((sum, country) => sum + ((geoTimeline.data[country] || [])[idx] || 0), 0)
+          );
+          const adaptiveTimeline = getAdaptiveTimelineData(combinedData, months, { from, to });
+          
+          const geoDatasets = countries.map((country, index) => {
+            let countryData;
+            
+            if (adaptiveTimeline.timeUnit === 'month') {
+              // Use actual monthly data
+              countryData = months.map((month, idx) => (geoTimeline.data[country] || [])[idx] || 0);
+            } else {
+              // For daily/weekly views, distribute country data proportionally
+              const countryMonthlyTotals = months.map((month, idx) => (geoTimeline.data[country] || [])[idx] || 0);
+              const totalCountryInstalls = countryMonthlyTotals.reduce((sum, val) => sum + val, 0);
+              
+              if (adaptiveTimeline.timeUnit === 'day') {
+                // Distribute across days using base daily weights
+                const weights = adaptiveTimeline.data.map(v => Math.max(0, v));
+                countryData = allocateProportional(totalCountryInstalls, weights);
+                if (countryData.every(v => v === 0) && totalCountryInstalls > 0) {
+                  countryData = allocateProportional(totalCountryInstalls, new Array(adaptiveTimeline.labels.length).fill(1));
+                }
+              } else if (adaptiveTimeline.timeUnit === 'week') {
+                // Distribute each month across 4 weeks proportionally and flatten
+                const weeklyData = [];
+                months.forEach((month, monthIdx) => {
+                  const mTotal = countryMonthlyTotals[monthIdx] || 0;
+                  const allocated = allocateProportional(mTotal, [1,1,1,1]);
+                  allocated.forEach(v => weeklyData.push(v));
+                });
+                countryData = weeklyData;
+              }
+            }
+            
             return {
-              label: osType,
-              data: simulatedData,
+              label: country,
+              data: countryData,
               borderColor: chartColors[index % chartColors.length],
               backgroundColor: chartColors[index % chartColors.length] + '20',
               borderWidth: 2,
               fill: false,
               tension: 0.3,
-              pointRadius: 2,
-              pointHoverRadius: 4
+              pointRadius: adaptiveTimeline.timeUnit === 'day' ? 6 : (adaptiveTimeline.timeUnit === 'week' ? 4 : 3),
+              pointHoverRadius: adaptiveTimeline.timeUnit === 'day' ? 8 : (adaptiveTimeline.timeUnit === 'week' ? 6 : 5)
             };
           });
-
-          createOrUpdateChart('#osTimelineChart', {
-            type: 'line',
-            data: {
-              labels: months,
-              datasets: osDatasets
-            },
-            options: {
-              ...commonOptions,
-              plugins: {
-                ...commonOptions.plugins,
-                legend: {
-                  display: true,
-                  position: 'top',
-                  labels: {
-                    color: colors.textSecondary,
-                    font: { family: 'Inter', size: 11 },
-                    usePointStyle: true,
-                    padding: 15
-                  }
-                },
-                tooltip: {
-                  ...commonOptions.plugins.tooltip,
-                  callbacks: {
-                    afterTitle: () => '(Simulated data - install telemetry to track actual OS adoption over time)'
-                  }
-                }
-              },
-              scales: {
-                ...commonOptions.scales,
-                y: {
-                  ...commonOptions.scales.y,
-                  title: {
-                    display: true,
-                    text: 'Monthly Installs (Simulated)',
-                    color: colors.textMuted,
-                    font: { family: 'Inter', size: 12 }
-                  }
-                },
-                x: {
-                  ...commonOptions.scales.x,
-                  title: {
-                    display: true,
-                    text: 'Timeline',
-                    color: colors.textMuted,
-                    font: { family: 'Inter', size: 12 }
-                  }
-                }
-              },
-              interaction: { intersect: false, mode: 'index' }
-            }
-          });
-        }
-
-        // Geographic Timeline Chart - NEW
-        if (data.geoTimeline && data.geoTimeline.months && data.geoTimeline.months.length > 0) {
-          const geoTimeline = data.geoTimeline;
-          const months = geoTimeline.months || [];
-          const countries = geoTimeline.countries || [];
-          const geoTimelineData = geoTimeline.data || {};
-          
-          const geoDatasets = countries.map((country, index) => ({
-            label: country,
-            data: geoTimelineData[country] || [],
-            borderColor: chartColors[index % chartColors.length],
-            backgroundColor: chartColors[index % chartColors.length] + '20',
-            borderWidth: 2,
-            fill: false,
-            tension: 0.3,
-            pointRadius: 2,
-            pointHoverRadius: 4
-          }));
 
           createOrUpdateChart('#geoTimelineChart', {
             type: 'line',
             data: {
-              labels: months,
+              labels: adaptiveTimeline.labels,
               datasets: geoDatasets
             },
             options: {
@@ -1407,10 +1534,11 @@
               scales: {
                 ...commonOptions.scales,
                 y: {
-                  ...commonOptions.scales.y,
+                  ...getSmartYAxisConfig(geoDatasets.flatMap(ds => ds.data), commonOptions.scales.y),
                   title: {
                     display: true,
-                    text: 'Monthly Installs',
+                    text: adaptiveTimeline.timeUnit === 'day' ? 'Daily Installs' : 
+                          adaptiveTimeline.timeUnit === 'week' ? 'Weekly Installs' : 'Monthly Installs',
                     color: colors.textMuted,
                     font: { family: 'Inter', size: 12 }
                   }
@@ -1419,7 +1547,7 @@
                   ...commonOptions.scales.x,
                   title: {
                     display: true,
-                    text: 'Timeline',
+                    text: adaptiveTimeline.title,
                     color: colors.textMuted,
                     font: { family: 'Inter', size: 12 }
                   }
@@ -1528,38 +1656,44 @@
 
         // Country chart (top 10)
         const countryEntries = Object.entries(byCountry)
+          .filter(([country, count]) => count > 0)
           .sort(([,a], [,b]) => b - a)
           .slice(0, 10);
 
-        createOrUpdateChart('#countryChart', {
-          type: 'doughnut',
-          data: {
-            labels: countryEntries.map(([country]) => country),
-            datasets: [{
-              data: countryEntries.map(([, count]) => count),
-              backgroundColor: chartColors,
-              borderWidth: 3,
-              borderColor: '#334155',
-              hoverBorderWidth: 4
-            }]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: {
-                position: 'right',
-                labels: {
-                  color: colors.textSecondary,
-                  font: { family: 'Inter', size: 11 },
-                  usePointStyle: true,
-                  padding: 15
-                }
-              }
+        if (countryEntries.length > 0) {
+          createOrUpdateChart('#countryChart', {
+            type: 'doughnut',
+            data: {
+              labels: countryEntries.map(([country]) => country),
+              datasets: [{
+                data: countryEntries.map(([, count]) => count),
+                backgroundColor: chartColors.slice(0, countryEntries.length),
+                borderWidth: 2,
+                borderColor: '#334155',
+                hoverBorderWidth: 3
+              }]
             },
-            cutout: '50%'
-          }
-        });
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: {
+                  position: 'right',
+                  labels: {
+                    color: colors.textSecondary,
+                    font: { family: 'Inter', size: 11 },
+                    usePointStyle: true,
+                    padding: 15,
+                    filter: function(legendItem, chartData) {
+                      return chartData.datasets[0].data[legendItem.datasetIndex] > 0;
+                    }
+                  }
+                }
+              },
+              cutout: '40%'
+            }
+          });
+        }
 
         // Country table
         updateCountryTable(byCountry, installsTotal);
@@ -1596,7 +1730,7 @@
         // Enhanced Analytics Charts
         
         // 1. Upgrade Timeline Chart
-        if (upgradeAnalytics.months && upgradeAnalytics.timeline) {
+        if (upgradeAnalytics.months && upgradeAnalytics.timeline && upgradeAnalytics.months.length > 1) {
           createOrUpdateChart('#upgradeTimelineChart', {
             type: 'line',
             data: {
@@ -1623,17 +1757,24 @@
                 legend: { display: false },
                 title: {
                   display: true,
-                  text: `Total: ${upgradeAnalytics.total} upgrades • ${upgradeAnalytics.retentionIndicator} retention`,
+                  text: `Total: ${upgradeAnalytics.total} upgrades • ${upgradeAnalytics.retentionIndicator || 'No retention data'} retention`,
                   color: colors.textSecondary,
                   font: { size: 12 }
                 }
+              },
+              scales: {
+                ...commonOptions.scales,
+                y: getSmartYAxisConfig(upgradeAnalytics.timeline, commonOptions.scales.y)
               }
             }
           });
+        } else if (shouldShowInsufficientDataMessage('#upgradeTimelineChart', 
+                   upgradeAnalytics.months ? upgradeAnalytics.months.length : 0)) {
+          // Message shown by function
         }
 
         // 2. Usage Activity Chart
-        if (usageAnalytics.months) {
+        if (usageAnalytics.months && usageAnalytics.months.length > 1) {
           const datasets = [];
           
           if (usageAnalytics.javaRuns.timeline) {
@@ -1664,29 +1805,39 @@
             });
           }
 
-          createOrUpdateChart('#usageActivityChart', {
-            type: 'line',
-            data: {
-              labels: usageAnalytics.months,
-              datasets: datasets
-            },
-            options: {
-              ...commonOptions,
-              plugins: {
-                ...commonOptions.plugins,
-                legend: { 
-                  display: true,
-                  position: 'top',
-                  labels: {
-                    color: colors.textSecondary,
-                    font: { family: 'Inter', size: 11 },
-                    usePointStyle: true,
-                    padding: 15
+          if (datasets.length > 0) {
+            const allValues = datasets.flatMap(d => d.data);
+            createOrUpdateChart('#usageActivityChart', {
+              type: 'line',
+              data: {
+                labels: usageAnalytics.months,
+                datasets: datasets
+              },
+              options: {
+                ...commonOptions,
+                plugins: {
+                  ...commonOptions.plugins,
+                  legend: { 
+                    display: true,
+                    position: 'top',
+                    labels: {
+                      color: colors.textSecondary,
+                      font: { family: 'Inter', size: 11 },
+                      usePointStyle: true,
+                      padding: 15
+                    }
                   }
+                },
+                scales: {
+                  ...commonOptions.scales,
+                  y: getSmartYAxisConfig(allValues, commonOptions.scales.y)
                 }
               }
-            }
-          });
+            });
+          }
+        } else if (shouldShowInsufficientDataMessage('#usageActivityChart', 
+                   usageAnalytics.months ? usageAnalytics.months.length : 0)) {
+          // Message shown by function
         }
 
         // 3. Engagement Correlation Chart
@@ -1696,49 +1847,53 @@
           { label: 'Upgrades', value: upgradeAnalytics.total, color: colors.secondary },
           { label: 'Java Runs', value: usageAnalytics.javaRuns.total, color: colors.accent },
           { label: 'Theme Changes', value: usageAnalytics.themeChanges.total, color: colors.tertiary }
-        ];
+        ].filter(item => item.value > 0); // Filter out zero values
 
-        createOrUpdateChart('#engagementChart', {
-          type: 'bar',
-          data: {
-            labels: engagementData.map(d => d.label),
-            datasets: [{
-              label: 'Count',
-              data: engagementData.map(d => d.value),
-              backgroundColor: engagementData.map(d => d.color + '80'),
-              borderColor: engagementData.map(d => d.color),
-              borderWidth: 2,
-              borderRadius: 6,
-              borderSkipped: false
-            }]
-          },
-          options: {
-            ...commonOptions,
-            plugins: {
-              ...commonOptions.plugins,
-              legend: { display: false },
-              title: {
-                display: true,
-                text: `Retention Grade: ${retentionMetrics.retentionGrade} • Engagement Rate: ${usageAnalytics.javaRuns.engagementRate} runs/user`,
-                color: colors.textSecondary,
-                font: { size: 12 }
-              }
+        if (engagementData.length > 0) {
+          const engagementValues = engagementData.map(d => d.value);
+          createOrUpdateChart('#engagementChart', {
+            type: 'bar',
+            data: {
+              labels: engagementData.map(d => d.label),
+              datasets: [{
+                label: 'Count',
+                data: engagementValues,
+                backgroundColor: engagementData.map(d => d.color + '80'),
+                borderColor: engagementData.map(d => d.color),
+                borderWidth: 2,
+                borderRadius: 6,
+                borderSkipped: false,
+                minBarLength: Math.max(...engagementValues) <= 10 ? 15 : 0
+              }]
             },
-            scales: {
-              ...commonOptions.scales,
-              y: {
-                ...commonOptions.scales.y,
-                type: 'logarithmic',
-                ticks: {
-                  ...commonOptions.scales.y.ticks,
-                  callback: function(value) {
-                    return formatNumber(value);
+            options: {
+              ...commonOptions,
+              plugins: {
+                ...commonOptions.plugins,
+                legend: { display: false },
+                title: {
+                  display: true,
+                  text: `Retention Grade: ${retentionMetrics.retentionGrade} • Engagement Rate: ${usageAnalytics.javaRuns.engagementRate || 0} runs/user`,
+                  color: colors.textSecondary,
+                  font: { size: 12 }
+                }
+              },
+              scales: {
+                ...commonOptions.scales,
+                y: {
+                  ...getSmartYAxisConfig(engagementValues, commonOptions.scales.y),
+                  type: engagementValues.some(v => v > 100) ? 'logarithmic' : 'linear',
+                  ticks: {
+                    ...commonOptions.scales.y.ticks,
+                    callback: function(value) {
+                      return formatNumber(value);
+                    }
                   }
                 }
               }
             }
-          }
-        });
+          });
+        }
       }
 
       // Fixed advanced analytics charts
@@ -1755,42 +1910,50 @@
         if (data.seasonalPatterns && Array.isArray(data.seasonalPatterns) && data.seasonalPatterns.length > 0) {
           console.log('Seasonal patterns data:', data.seasonalPatterns);
           try {
-            const maxValue = Math.max(...data.seasonalPatterns.map(p => p.average || 0));
-            
-            createOrUpdateChart('#seasonalChart', {
-              type: 'bar',
-              data: {
-                labels: data.seasonalPatterns.map(p => p.month),
-                datasets: [{
-                  label: 'Average Installs',
-                  data: data.seasonalPatterns.map(p => p.average || 0),
-                  backgroundColor: data.seasonalPatterns.map(p => {
-                    const intensity = maxValue > 0 ? (p.average || 0) / maxValue : 0;
-                    return `rgba(59, 130, 246, ${0.3 + intensity * 0.7})`;
-                  }),
-                  borderColor: '#3b82f6',
-                  borderWidth: 1
-                }]
-              },
-              options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: { display: false }
+            const validPatterns = data.seasonalPatterns.filter(p => p.average > 0);
+            if (validPatterns.length > 0) {
+              const maxValue = Math.max(...validPatterns.map(p => p.average || 0));
+              const seasonalValues = validPatterns.map(p => p.average || 0);
+              
+              createOrUpdateChart('#seasonalChart', {
+                type: 'bar',
+                data: {
+                  labels: validPatterns.map(p => p.month),
+                  datasets: [{
+                    label: 'Average Installs',
+                    data: seasonalValues,
+                    backgroundColor: validPatterns.map(p => {
+                      const intensity = maxValue > 0 ? (p.average || 0) / maxValue : 0;
+                      return `rgba(59, 130, 246, ${0.3 + intensity * 0.7})`;
+                    }),
+                    borderColor: '#3b82f6',
+                    borderWidth: 1,
+                    borderRadius: 4,
+                    minBarLength: Math.max(...seasonalValues) <= 5 ? 15 : 0
+                  }]
                 },
-                scales: {
-                  y: {
-                    beginAtZero: true,
-                    ticks: { color: '#9ca3af' },
-                    grid: { color: '#374151' }
+                options: {
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: {
+                    legend: { display: false }
                   },
-                  x: {
-                    ticks: { color: '#9ca3af' },
-                    grid: { display: false }
+                  scales: {
+                    y: {
+                      ...getSmartYAxisConfig(seasonalValues, {
+                        beginAtZero: true,
+                        ticks: { color: '#9ca3af' },
+                        grid: { color: '#374151' }
+                      })
+                    },
+                    x: {
+                      ticks: { color: '#9ca3af' },
+                      grid: { display: false }
+                    }
                   }
                 }
-              }
-            });
+              });
+            }
           } catch (error) {
             console.error('Error rendering seasonal chart:', error);
           }
@@ -1802,42 +1965,52 @@
         if (data.geographicGrowth && typeof data.geographicGrowth === 'object' && Object.keys(data.geographicGrowth).length > 0) {
           console.log('Geographic growth data:', data.geographicGrowth);
           try {
-            const countries = Object.keys(data.geographicGrowth).slice(0, 10);
-            const growthRates = countries.map(c => data.geographicGrowth[c]?.growthRate || 0);
+            const validGrowthEntries = Object.entries(data.geographicGrowth)
+              .filter(([country, data]) => data && data.growthRate > 0)
+              .slice(0, 10);
             
-            createOrUpdateChart('#geoGrowthChart', {
-              type: 'bar', // FIXED: Use 'bar' not 'horizontalBar'
-              data: {
-                labels: countries,
-                datasets: [{
-                  label: 'Growth Rate (%)',
-                  data: growthRates,
-                  backgroundColor: growthRates.map(rate => 
-                    rate > 20 ? '#10b981' : rate > 5 ? '#3b82f6' : rate > 0 ? '#f59e0b' : '#ef4444'
-                  ),
-                  borderWidth: 0
-                }]
-              },
-              options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                indexAxis: 'y', // This makes it horizontal
-                plugins: {
-                  legend: { display: false }
+            if (validGrowthEntries.length > 0) {
+              const countries = validGrowthEntries.map(([country]) => country);
+              const growthRates = validGrowthEntries.map(([, data]) => data.growthRate || 0);
+              
+              createOrUpdateChart('#geoGrowthChart', {
+                type: 'bar', // FIXED: Use 'bar' not 'horizontalBar'
+                data: {
+                  labels: countries,
+                  datasets: [{
+                    label: 'Growth Rate (%)',
+                    data: growthRates,
+                    backgroundColor: growthRates.map(rate => 
+                      rate > 20 ? '#10b981' : rate > 5 ? '#3b82f6' : rate > 0 ? '#f59e0b' : '#ef4444'
+                    ),
+                    borderWidth: 0,
+                    borderRadius: 4,
+                    minBarLength: Math.max(...growthRates) <= 5 ? 15 : 0
+                  }]
                 },
-                scales: {
-                  y: {
-                    ticks: { color: '#9ca3af' },
-                    grid: { display: false }
+                options: {
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  indexAxis: 'y', // This makes it horizontal
+                  plugins: {
+                    legend: { display: false }
                   },
-                  x: {
-                    beginAtZero: true,
-                    ticks: { color: '#9ca3af' },
-                    grid: { color: '#374151' }
+                  scales: {
+                    y: {
+                      ticks: { color: '#9ca3af' },
+                      grid: { display: false }
+                    },
+                    x: {
+                      ...getSmartYAxisConfig(growthRates, {
+                        beginAtZero: true,
+                        ticks: { color: '#9ca3af' },
+                        grid: { color: '#374151' }
+                      })
+                    }
                   }
                 }
-              }
-            });
+              });
+            }
           } catch (error) {
             console.error('Error rendering geographic growth chart:', error);
           }
@@ -1850,10 +2023,17 @@
           console.log('Version migration data:', data.versionMigration);
           try {
             const versions = Object.keys(data.versionMigration).slice(-10);
-            const adoptionSpeeds = versions.map(v => data.versionMigration[v]?.adoptionMonths || 0).filter(s => s > 0);
-            const versionLabels = versions.filter(v => (data.versionMigration[v]?.adoptionMonths || 0) > 0);
+            const validAdoptions = versions
+              .map(v => ({
+                version: v,
+                adoptionMonths: data.versionMigration[v]?.adoptionMonths || 0
+              }))
+              .filter(item => item.adoptionMonths > 0);
             
-            if (adoptionSpeeds.length > 0) {
+            if (validAdoptions.length > 0) {
+              const adoptionSpeeds = validAdoptions.map(item => item.adoptionMonths);
+              const versionLabels = validAdoptions.map(item => item.version);
+              
               createOrUpdateChart('#adoptionChart', {
                 type: 'line',
                 data: {
@@ -1872,16 +2052,21 @@
                 options: {
                   responsive: true,
                   maintainAspectRatio: false,
+                  plugins: {
+                    legend: { display: false }
+                  },
                   scales: {
                     y: {
-                      beginAtZero: true,
-                      title: {
-                        display: true,
-                        text: 'Months to 80% Adoption',
-                        color: '#9ca3af'
-                      },
-                      ticks: { color: '#9ca3af' },
-                      grid: { color: '#374151' }
+                      ...getSmartYAxisConfig(adoptionSpeeds, {
+                        beginAtZero: true,
+                        title: {
+                          display: true,
+                          text: 'Months to 80% Adoption',
+                          color: '#9ca3af'
+                        },
+                        ticks: { color: '#9ca3af' },
+                        grid: { color: '#374151' }
+                      })
                     },
                     x: {
                       ticks: { color: '#9ca3af' },
@@ -2138,6 +2323,9 @@
               .slice(0, 10);
             
             if (activeVersions.length > 0) {
+              const currentInstalls = activeVersions.map(([, vData]) => vData.currentInstalls || 0);
+              const peakInstalls = activeVersions.map(([, vData]) => vData.peakValue || 0);
+              
               // Use a bar chart to show version adoption clearly
               createOrUpdateChart('#lifecycleChart', {
                 type: 'bar',
@@ -2145,7 +2333,7 @@
                   labels: activeVersions.map(([version]) => `v${version}`),
                   datasets: [{
                     label: 'Current Installs',
-                    data: activeVersions.map(([, vData]) => vData.currentInstalls || 0),
+                    data: currentInstalls,
                     backgroundColor: activeVersions.map((_, index) => {
                       // Color gradient from newest (green) to oldest (orange to red)
                       if (index < 2) return '#10b981'; // Newest versions - green
@@ -2155,9 +2343,10 @@
                     }),
                     borderRadius: 4,
                     borderSkipped: false,
+                    minBarLength: Math.max(...currentInstalls) <= 5 ? 15 : 0
                   }, {
                     label: 'Peak Installs',
-                    data: activeVersions.map(([, vData]) => vData.peakValue || 0),
+                    data: peakInstalls,
                     backgroundColor: activeVersions.map((_, index) => {
                       // Lighter version of the same colors
                       if (index < 2) return 'rgba(16, 185, 129, 0.3)';
@@ -2178,14 +2367,16 @@
                       grid: { display: false }
                     },
                     y: {
-                      title: {
-                        display: true,
-                        text: 'Install Count',
-                        color: '#9ca3af'
-                      },
-                      ticks: { color: '#9ca3af' },
-                      grid: { color: '#374151' },
-                      beginAtZero: true
+                      ...getSmartYAxisConfig([...currentInstalls, ...peakInstalls], {
+                        title: {
+                          display: true,
+                          text: 'Install Count',
+                          color: '#9ca3af'
+                        },
+                        ticks: { color: '#9ca3af' },
+                        grid: { color: '#374151' },
+                        beginAtZero: true
+                      })
                     }
                   },
                   plugins: {
@@ -2224,6 +2415,7 @@
       function updateCountryTable(byCountry, total) {
         const tbody = document.getElementById('countryTable');
         const entries = Object.entries(byCountry)
+          .filter(([country, count]) => count > 0)
           .sort(([,a], [,b]) => b - a)
           .slice(0, 20);
 

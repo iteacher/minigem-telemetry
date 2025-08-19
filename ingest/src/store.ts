@@ -6,6 +6,14 @@ import { CONFIG } from './config.js';
 type Store = {
   meta: { createdAt: string; updatedAt: string };
   months: Record<string /*year*/, Record<string /*mm*/, { installs: number }>>;
+  // Launch window daily tallies: YYYY-MM-DD -> installs
+  launchDays?: Record<string /*YYYY-MM-DD*/, number>;
+  // Per-day breakdowns during launch window
+  launchVersionsByDay?: Record<string /*YYYY-MM-DD*/, Record<string /*version*/, number>>;
+  launchOsByDay?: Record<string /*YYYY-MM-DD*/, Record<string /*os*/, number>>;
+  launchGeoByDay?: Record<string /*YYYY-MM-DD*/, Record<string /*country*/, number>>;
+  // Flag to indicate per-day launch data was rolled up/cleared
+  launchRolledUp?: boolean;
   
   // NEW: Track extension upgrades separately
   upgrades: {
@@ -121,7 +129,7 @@ function defaultStore(): Store {
         "Unknown": 0
       }
     },
-    geoByMonth: {
+  geoByMonth: {
       [currentMonthKey]: {
         "US": 0,
         "GB": 0,
@@ -132,7 +140,14 @@ function defaultStore(): Store {
         "JP": 0,
         "Unknown": 0
       }
-    }
+  },
+  // Launch window per-day tallies (empty by default)
+  launchDays: {},
+  // Per-day breakdowns for launch window (YYYY-MM-DD -> { version: count })
+  launchVersionsByDay: {},
+  launchOsByDay: {},
+  launchGeoByDay: {},
+  launchRolledUp: false
   };
 }
 
@@ -150,6 +165,11 @@ function readStore(): Store {
     obj.versionsByMonth = obj.versionsByMonth || {};
     obj.osByMonth = obj.osByMonth || {};
     obj.geoByMonth = obj.geoByMonth || {};
+  obj.launchDays = obj.launchDays || {};
+  obj.launchVersionsByDay = obj.launchVersionsByDay || {};
+  obj.launchOsByDay = obj.launchOsByDay || {};
+  obj.launchGeoByDay = obj.launchGeoByDay || {};
+  obj.launchRolledUp = obj.launchRolledUp || false;
     obj.meta = obj.meta || { createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
     
     // NEW: Ensure upgrade and usage structures exist
@@ -192,7 +212,51 @@ function serialize<T>(fn: () => Promise<T> | T): Promise<T> {
 
 export async function storeInit(): Promise<void> {
   // Ensure file exists
-  await serialize(() => { writeStore(readStore()); });
+  await serialize(async () => {
+    // Ensure store file exists and perform rollup if launch window expired
+    const s = readStore();
+    // Write to ensure file exists
+    writeStore(s);
+    try {
+      await rollupLaunchWindowIfExpired();
+    } catch (e) {
+      // swallow - rollup failures should not block startup
+    }
+  });
+}
+
+// Roll up (clear) per-day launch data after launch window has elapsed to avoid unbounded growth.
+export async function rollupLaunchWindowIfExpired() {
+  return serialize(() => {
+    const s = readStore();
+    try {
+      const launchStart = new Date(CONFIG.LAUNCH_DATE + 'T00:00:00Z');
+      const launchDuration = Number(CONFIG.LAUNCH_DURATION) || 0;
+      const launchEnd = launchStart.getTime() + (launchDuration * 86400000);
+      if (Date.now() < launchEnd) return; // still in window
+      if (s.launchRolledUp) return; // already rolled up
+
+      // We expect monthly tallies to already include these installs (upsert increments monthly buckets),
+      // so just remove the per-day detailed structures to free space.
+      if (s.launchDays && Object.keys(s.launchDays).length > 0) {
+        s.launchDays = {};
+      }
+      if (s.launchVersionsByDay && Object.keys(s.launchVersionsByDay).length > 0) {
+        s.launchVersionsByDay = {};
+      }
+      if (s.launchOsByDay && Object.keys(s.launchOsByDay).length > 0) {
+        s.launchOsByDay = {};
+      }
+      if (s.launchGeoByDay && Object.keys(s.launchGeoByDay).length > 0) {
+        s.launchGeoByDay = {};
+      }
+
+      s.launchRolledUp = true;
+      writeStore(s);
+    } catch (e) {
+      // ignore errors during rollup
+    }
+  });
 }
 
 export async function storeUpsertInstall(ev: any, geo?: { country?: string }) {
@@ -215,8 +279,41 @@ export async function storeUpsertInstall(ev: any, geo?: { country?: string }) {
     const y = String(d.getUTCFullYear());
     const m = String(d.getUTCMonth() + 1).padStart(2, '0');
     const monthKey = `${y}-${m}`;
+  const dayKey = new Date(t).toISOString().slice(0,10); // YYYY-MM-DD (UTC)
+
+    // Determine if this event falls into the configured launch window
+    let inLaunchWindow = false;
+    try {
+      const launchStart = new Date(CONFIG.LAUNCH_DATE + 'T00:00:00Z');
+      const launchDuration = Number(CONFIG.LAUNCH_DURATION) || 0;
+      const diffDays = Math.floor((new Date(t).getTime() - launchStart.getTime()) / 86400000);
+      inLaunchWindow = diffDays >= 0 && diffDays < launchDuration;
+    } catch {
+      inLaunchWindow = false;
+    }
 
     if (evt === 'install.created') {
+      // If inside the launch window, increment daily tally (separate from monthly tallies)
+      if (inLaunchWindow) {
+        store.launchDays = store.launchDays || {};
+        store.launchDays[dayKey] = (store.launchDays[dayKey] || 0) + 1;
+
+        // Per-day version tally
+        store.launchVersionsByDay = store.launchVersionsByDay || {};
+        store.launchVersionsByDay[dayKey] = store.launchVersionsByDay[dayKey] || {};
+        store.launchVersionsByDay[dayKey][ext] = (store.launchVersionsByDay[dayKey][ext] || 0) + 1;
+
+        // Per-day OS tally
+        store.launchOsByDay = store.launchOsByDay || {};
+        store.launchOsByDay[dayKey] = store.launchOsByDay[dayKey] || {};
+        store.launchOsByDay[dayKey][os] = (store.launchOsByDay[dayKey][os] || 0) + 1;
+
+        // Per-day geo tally
+        store.launchGeoByDay = store.launchGeoByDay || {};
+        store.launchGeoByDay[dayKey] = store.launchGeoByDay[dayKey] || {};
+        store.launchGeoByDay[dayKey][country] = (store.launchGeoByDay[dayKey][country] || 0) + 1;
+      }
+
       // Count version for installs
       store.byExt[ext] = (store.byExt[ext] || 0) + 1;
 
@@ -306,6 +403,49 @@ export function storeReadInstallStats(windowMonths = 12) {
     }
   }
 
+  // Detect if we're inside a configured launch window (use daily tallies)
+  let inLaunchWindow = false;
+  try {
+    const launchStart = new Date(CONFIG.LAUNCH_DATE + 'T00:00:00Z');
+    const launchDuration = Number(CONFIG.LAUNCH_DURATION) || 0;
+    const diffDaysNow = Math.floor((Date.now() - launchStart.getTime()) / 86400000);
+    inLaunchWindow = diffDaysNow >= 0 && diffDaysNow < launchDuration;
+  } catch {
+    inLaunchWindow = false;
+  }
+
+  if (inLaunchWindow && s.launchDays && Object.keys(s.launchDays).length > 0) {
+    const days = Object.keys(s.launchDays).sort();
+    const dayCounts = days.map(d => Number(s.launchDays![d] || 0));
+
+    return {
+      from: days[0] || 'N/A',
+      to: days[days.length - 1] || 'N/A',
+      windowMonths: months.length,
+      totalMonths: months.length,
+      installsTotal,
+      monthlyInstalls: { months, counts },
+      dailyInstalls: { dates: days, counts: dayCounts },
+      byExt: s.byExt,
+      byOs: s.byOs,
+      byCountry: s.byCountry,
+      versionTimeline: generateVersionTimelineDays(s, days),
+      osTimeline: generateOsTimelineDays(s, days),
+      geoTimeline: generateGeoTimelineDays(s, days),
+      // Advanced Analytics preserved
+      seasonalPatterns: generateSeasonalPatterns(s),
+      geographicGrowth: generateGeographicGrowth(s),
+      osGeoPreferences: generateOsGeoPreferences(s),
+      versionMigration: generateVersionMigration(s),
+      growthTrajectory: generateGrowthTrajectory(s),
+      platformTrends: generatePlatformTrends(s),
+      upgradeAnalytics: generateUpgradeAnalytics(s),
+      usageAnalytics: generateUsageAnalytics(s),
+      retentionMetrics: generateRetentionMetrics(s),
+      updatedAt: s.meta.updatedAt,
+      file: FILE
+    };
+  }
   // Show ALL months instead of windowing (user wants to see all data)
   const winMonths = months;
   const winCounts = counts;
@@ -442,6 +582,80 @@ function generateGeoTimeline(s: Store) {
     countries: topCountries,
     data: geoData
   };
+}
+
+// Generate per-day version timeline during launch window
+function generateVersionTimelineDays(s: Store, days: string[]) {
+  const topVersions = Object.entries(s.byExt)
+    .sort(([,a], [,b]) => b - a)
+    .slice(0, 8)
+    .map(([v]) => v);
+
+  const data: Record<string, number[]> = {};
+
+  for (const v of topVersions) {
+    data[v] = days.map(day => {
+      // If we have per-day breakdown, use it
+      const perDay = s.launchVersionsByDay?.[day]?.[v];
+      if (typeof perDay === 'number') return perDay;
+
+      // Otherwise, fallback: distribute monthly version totals proportionally across launchDays
+      // Find month key for this day
+      const m = day.slice(0,7);
+      const monthTotalForVersion = s.versionsByMonth?.[m]?.[v] || 0;
+      const monthDays = days.filter(d => d.startsWith(m));
+      const denom = monthDays.reduce((sum, d) => sum + (s.launchDays?.[d] || 0), 0) || monthDays.length || 1;
+      const proportion = (s.launchDays?.[day] || 0) / denom;
+      return Math.round(monthTotalForVersion * proportion);
+    });
+  }
+
+  return { dates: days, versions: topVersions, data };
+}
+
+// Generate per-day OS timeline during launch window
+function generateOsTimelineDays(s: Store, days: string[]) {
+  const osTypes = Object.keys(s.byOs).sort();
+  const data: Record<string, number[]> = {};
+
+  for (const os of osTypes) {
+    data[os] = days.map(day => {
+      const perDay = s.launchOsByDay?.[day]?.[os];
+      if (typeof perDay === 'number') return perDay;
+
+      // fallback proportional distribution based on monthly osByMonth
+      const m = day.slice(0,7);
+      const monthTotalForOs = s.osByMonth?.[m]?.[os] || 0;
+      const monthDays = days.filter(d => d.startsWith(m));
+      const denom = monthDays.reduce((sum, d) => sum + (s.launchDays?.[d] || 0), 0) || monthDays.length || 1;
+      const proportion = (s.launchDays?.[day] || 0) / denom;
+      return Math.round(monthTotalForOs * proportion);
+    });
+  }
+
+  return { dates: days, osTypes, data };
+}
+
+// Generate per-day geo (country) timeline during launch window
+function generateGeoTimelineDays(s: Store, days: string[]) {
+  const countries = Object.keys(s.byCountry).sort();
+  const data: Record<string, number[]> = {};
+
+  for (const c of countries) {
+    data[c] = days.map(day => {
+      const perDay = s.launchGeoByDay?.[day]?.[c];
+      if (typeof perDay === 'number') return perDay;
+
+      const m = day.slice(0,7);
+      const monthTotalForCountry = s.geoByMonth?.[m]?.[c] || 0;
+      const monthDays = days.filter(d => d.startsWith(m));
+      const denom = monthDays.reduce((sum, d) => sum + (s.launchDays?.[d] || 0), 0) || monthDays.length || 1;
+      const proportion = (s.launchDays?.[day] || 0) / denom;
+      return Math.round(monthTotalForCountry * proportion);
+    });
+  }
+
+  return { dates: days, countries, data };
 }
 
 // Advanced Analytics Functions
