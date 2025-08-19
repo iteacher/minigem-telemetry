@@ -192,9 +192,21 @@ async function main() {
   });
 
   try {
-    log.info('boot.listen.start', { port: CONFIG.PORT, host: '0.0.0.0' });
-    await app.listen({ port: CONFIG.PORT, host: '0.0.0.0' });
-    log.info('boot.listen.ok', { url: `http://0.0.0.0:${CONFIG.PORT}` });
+    // Check if we're running under Passenger (no port env vars means Passenger handles HTTP directly)
+    const isPassenger = Object.keys(process.env).length > 0 && 
+                       !process.env.PORT && 
+                       !process.env.PASSENGER_PORT &&
+                       process.env.PWD && process.env.PWD.includes('telemetary.jwc.minigem.uk');
+    
+    if (isPassenger) {
+      log.info('boot.passenger.detected', 'Passenger mode - HTTP handled directly');
+      // In Passenger mode, we don't bind to a port - Passenger handles HTTP routing
+      log.info('boot.passenger.ready', { appRoot: process.env.PWD });
+    } else {
+      log.info('boot.listen.start', { port: CONFIG.PORT, host: '0.0.0.0' });
+      await app.listen({ port: CONFIG.PORT, host: '0.0.0.0' });
+      log.info('boot.listen.ok', { url: `http://0.0.0.0:${CONFIG.PORT}` });
+    }
   } catch (e: any) {
     log.error('boot.listen.error', { error: String(e?.message || e) });
     throw e;
