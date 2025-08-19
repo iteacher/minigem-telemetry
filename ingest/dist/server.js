@@ -61,19 +61,32 @@ async function main() {
     app.addHook('onRequest', async (req) => { log.info('req', { method: req.method, url: req.url, ip: req.ip }); });
     app.addHook('onResponse', async (req, reply) => { log.info('res', { method: req.method, url: req.url, status: reply.statusCode }); });
     log.info('boot.start', { port: CONFIG.PORT });
+    // Log common port env candidates to help diagnose hosting configs
+    log.info('boot.port.candidates', {
+        PORT: process.env.PORT || null,
+        APP_PORT: process.env.APP_PORT || null,
+        PORT0: process.env.PORT0 || null,
+        WEB_PORT: process.env.WEB_PORT || null,
+        HTTP_PORT: process.env.HTTP_PORT || null
+    });
+    log.info('boot.geo.init.start');
     await initGeo();
+    log.info('boot.geo.init.done');
+    log.info('boot.store.init.start');
     await storeInit();
     log.info('boot.store.ready', { file: pathToStore() });
     log.info('boot.register.rateLimit.start');
     await app.register(rateLimit, { max: CONFIG.RATE_LIMIT_MAX, timeWindow: CONFIG.RATE_LIMIT_TIME_WINDOW });
     log.info('boot.register.rateLimit.done');
     // CORS to allow dashboard hosted on another origin to call this API
+    log.info('boot.cors.register.start');
     await app.register(cors, {
         origin: (origin, cb) => cb(null, true), // allow all origins for now
         methods: ['GET', 'POST', 'OPTIONS'],
         allowedHeaders: ['Content-Type']
     });
-    app.get('/health', async () => ({ ok: true, ts: Date.now() }));
+    log.info('boot.cors.register.done');
+    app.get('/health', async () => { log.info('health.ping'); return ({ ok: true, ts: Date.now() }); });
     app.get('/dbhealth', async () => ({ enabled: false, ok: false, note: 'DB removed; using JSON store', file: pathToStore() }));
     // Debug: write to log file and return path
     app.get('/debug/logping', async () => {
@@ -106,7 +119,12 @@ async function main() {
     // Minimal installs-only stats for simplified dashboard
     app.get('/stats/install', async (_req, reply) => {
         try {
-            return storeReadInstallStats(12);
+            log.info('stats.install.start');
+            const res = storeReadInstallStats(12);
+            const months = Array.isArray(res?.monthlyInstalls?.months) ? res.monthlyInstalls.months.length : 0;
+            const days = Array.isArray(res?.dailyInstalls?.dates) ? res.dailyInstalls.dates.length : 0;
+            log.info('stats.install.summary', { months, days, total: res?.installsTotal, file: res?.file });
+            return res;
         }
         catch (e) {
             log.error('stats.install.error', { err: String(e) });
