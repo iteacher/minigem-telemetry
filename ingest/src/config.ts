@@ -1,31 +1,8 @@
 import path from 'path';
 
-// Resolve port from several common env var names used by hosts (A2, Render, Heroku, etc.).
-// Falls back to 3000 when not provided so the app still runs in local/dev or misconfigured envs.
-function resolvePort(): number {
-  const candidates = [
-    process.env.PORT,
-    process.env.APP_PORT as string | undefined,
-    process.env.PORT0 as string | undefined,
-    process.env.WEB_PORT as string | undefined,
-    process.env.HTTP_PORT as string | undefined,
-    // Passenger-specific port variables
-    process.env.PASSENGER_PORT as string | undefined,
-    process.env.PHUSION_PASSENGER_PORT as string | undefined,
-    process.env.SERVER_PORT as string | undefined
-  ].filter(Boolean) as string[];
-  for (const raw of candidates) {
-    if (/^\d+$/.test(raw)) {
-      const n = parseInt(raw, 10);
-      if (n > 0 && n < 65536) return n;
-    }
-  }
-  return 3000;
-}
-
 export const CONFIG = {
-  // HTTP server port
-  PORT: resolvePort(),
+  // HTTP server port - simple resolution that works with Passenger
+  PORT: parseInt(process.env.PORT || '', 10) ? parseInt(process.env.PORT as string, 10) : 3000,
   LOG_DIR: process.env.LOG_DIR || '/opt/jwc-telemetry/logs/events-transformed',
   MAX_BODY: 64 * 1024,
   YEARLY_SALT: process.env.YEARLY_SALT || 'jwc-2025-salt',

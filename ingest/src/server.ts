@@ -1,6 +1,5 @@
 import Fastify, { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import rateLimit from '@fastify/rate-limit';
-import cors from '@fastify/cors';
 import { CONFIG } from './config.js';
 import { validateEnvelope, validateEvent, normalizeEvent } from './validate.js';
 import { initGeo, lookup } from './geo.js';
@@ -61,33 +60,7 @@ async function main() {
   app.addHook('onRequest', async (req) => { log.info('req', { method: req.method, url: req.url, ip: (req as any).ip }); });
   app.addHook('onResponse', async (req, reply) => { log.info('res', { method: req.method, url: req.url, status: reply.statusCode }); });
   log.info('boot.start', { port: CONFIG.PORT });
-  // Log common port env candidates to help diagnose hosting configs
-  log.info('boot.port.candidates', {
-    PORT: process.env.PORT || null,
-    APP_PORT: process.env.APP_PORT || null,
-    PORT0: process.env.PORT0 || null,
-    WEB_PORT: process.env.WEB_PORT || null,
-    HTTP_PORT: process.env.HTTP_PORT || null,
-    PASSENGER_PORT: process.env.PASSENGER_PORT || null,
-    PHUSION_PASSENGER_PORT: process.env.PHUSION_PASSENGER_PORT || null,
-    SERVER_PORT: process.env.SERVER_PORT || null
-  });
-  // Log all env vars that contain 'port' to find Passenger's port variable
-  const portEnvs = Object.keys(process.env).filter(k => k.toLowerCase().includes('port')).reduce((acc, k) => {
-    acc[k] = process.env[k];
-    return acc;
-  }, {} as Record<string, string | undefined>);
-  log.info('boot.all.port.envs', portEnvs);
-  // Log Passenger-specific env vars
-  const passengerEnvs = Object.keys(process.env).filter(k => k.toLowerCase().includes('passenger')).reduce((acc, k) => {
-    acc[k] = process.env[k];
-    return acc;
-  }, {} as Record<string, string | undefined>);
-  log.info('boot.passenger.envs', passengerEnvs);
-  log.info('boot.geo.init.start');
   await initGeo();
-  log.info('boot.geo.init.done');
-  log.info('boot.store.init.start');
   await storeInit();
   log.info('boot.store.ready', { file: pathToStore() });
 
@@ -95,16 +68,7 @@ async function main() {
   await app.register(rateLimit, { max: CONFIG.RATE_LIMIT_MAX, timeWindow: CONFIG.RATE_LIMIT_TIME_WINDOW });
   log.info('boot.register.rateLimit.done');
 
-  // CORS to allow dashboard hosted on another origin to call this API
-  log.info('boot.cors.register.start');
-  await app.register(cors, {
-    origin: (origin, cb) => cb(null, true), // allow all origins for now
-    methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type']
-  });
-  log.info('boot.cors.register.done');
-
-  app.get('/health', async () => { log.info('health.ping'); return ({ ok: true, ts: Date.now() }); });
+  app.get('/health', async () => ({ ok: true, ts: Date.now() }));
 
   app.get('/dbhealth', async () => ({ enabled: false, ok: false, note: 'DB removed; using JSON store', file: pathToStore() }));
 
@@ -143,17 +107,7 @@ async function main() {
 
   // Minimal installs-only stats for simplified dashboard
   app.get('/stats/install', async (_req: FastifyRequest, reply: FastifyReply) => {
-    try {
-      log.info('stats.install.start');
-      const res = storeReadInstallStats(12);
-      const months = Array.isArray(res?.monthlyInstalls?.months) ? res.monthlyInstalls.months.length : 0;
-      const days = Array.isArray((res as any)?.dailyInstalls?.dates) ? (res as any).dailyInstalls.dates.length : 0;
-      log.info('stats.install.summary', { months, days, total: res?.installsTotal, file: (res as any)?.file });
-      return res;
-    } catch (e) {
-      log.error('stats.install.error', { err: String(e) });
-      return reply.code(500).send({ error: 'server_error' });
-    }
+    try { return storeReadInstallStats(12); } catch (e) { log.error('stats.install.error', { err: String(e) }); return reply.code(500).send({ error: 'server_error' }); }
   });
 
   app.post('/t', async (req: FastifyRequest, reply: FastifyReply) => {
@@ -192,25 +146,9 @@ async function main() {
   });
 
   try {
-    // Passenger detection: look for .htaccess config or specific env patterns
-    const isPassenger = !process.env.PORT && 
-                       !process.env.PASSENGER_PORT &&
-                       (process.env.PWD?.includes('telemetary.jwc.minigem.uk') || 
-                        process.env.DOCUMENT_ROOT || 
-                        process.env.SCRIPT_NAME !== undefined);
-    
-    if (isPassenger) {
-      log.info('boot.passenger.detected', 'Passenger mode - skipping port binding');
-      // In Passenger, we still need to call listen but Passenger will handle the actual port
-      // Use a random high port that Passenger will override
-      const passengerPort = 0; // Let system assign
-      await app.listen({ port: passengerPort, host: '0.0.0.0' });
-      log.info('boot.passenger.ready', { mode: 'passenger', assignedPort: app.server.address() });
-    } else {
-      log.info('boot.listen.start', { port: CONFIG.PORT, host: '0.0.0.0' });
-      await app.listen({ port: CONFIG.PORT, host: '0.0.0.0' });
-      log.info('boot.listen.ok', { url: `http://0.0.0.0:${CONFIG.PORT}` });
-    }
+    log.info('boot.listen.start', { port: CONFIG.PORT, host: '0.0.0.0' });
+    await app.listen({ port: CONFIG.PORT, host: '0.0.0.0' });
+    log.info('boot.listen.ok', { url: `http://0.0.0.0:${CONFIG.PORT}` });
   } catch (e: any) {
     log.error('boot.listen.error', { error: String(e?.message || e) });
     throw e;
