@@ -1,5 +1,6 @@
 import Fastify, { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import rateLimit from '@fastify/rate-limit';
+import cors from '@fastify/cors';
 import { CONFIG } from './config.js';
 import { validateEnvelope, validateEvent, normalizeEvent } from './validate.js';
 import { initGeo, lookup } from './geo.js';
@@ -67,6 +68,13 @@ async function main() {
   log.info('boot.register.rateLimit.start');
   await app.register(rateLimit, { max: CONFIG.RATE_LIMIT_MAX, timeWindow: CONFIG.RATE_LIMIT_TIME_WINDOW });
   log.info('boot.register.rateLimit.done');
+
+  // CORS to allow dashboard hosted on another origin to call this API
+  await app.register(cors, {
+    origin: (origin: any, cb: any) => cb(null, true), // allow all origins for now
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type']
+  });
 
   app.get('/health', async () => ({ ok: true, ts: Date.now() }));
 

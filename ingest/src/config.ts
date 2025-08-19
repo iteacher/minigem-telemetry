@@ -17,6 +17,6 @@ export const CONFIG = {
   // Launch window: when set, keep per-day tallies starting at LAUNCH_DATE for LAUNCH_DURATION days
   LAUNCH_DATE: process.env.LAUNCH_DATE || new Date().toISOString().slice(0, 10), // YYYY-MM-DD
   LAUNCH_DURATION: Number.isFinite(parseInt(process.env.LAUNCH_DURATION || '', 10)) ? parseInt(process.env.LAUNCH_DURATION as string, 10) : 90,
-  // File store path for installs counters
-  STORE_FILE: process.env.STATS_JSON_FILE || path.join(process.env.LOG_DIR || '/opt/jwc-telemetry/logs', 'installs.json')
+  // File store path for installs counters - single source of truth
+  STORE_FILE: process.env.STATS_JSON_FILE || '/home/mandersj/telemetary.jwc.minigem.uk/data/installs.json'
 };
