@@ -1,8 +1,8 @@
 import path from 'path';
 
 export const CONFIG = {
-  // HTTP server port - simple resolution that works with Passenger
-  PORT: parseInt(process.env.PORT || '', 10) ? parseInt(process.env.PORT as string, 10) : 3000,
+  // HTTP server port: always prefer platform-injected PORT; never default to DB port
+  PORT: Number.isFinite(parseInt(process.env.PORT || '', 10)) ? parseInt(process.env.PORT as string, 10) : 3000,
   LOG_DIR: process.env.LOG_DIR || '/opt/jwc-telemetry/logs/events-transformed',
   MAX_BODY: 64 * 1024,
   YEARLY_SALT: process.env.YEARLY_SALT || 'jwc-2025-salt',
@@ -17,6 +17,6 @@ export const CONFIG = {
   // Launch window: when set, keep per-day tallies starting at LAUNCH_DATE for LAUNCH_DURATION days
   LAUNCH_DATE: process.env.LAUNCH_DATE || new Date().toISOString().slice(0, 10), // YYYY-MM-DD
   LAUNCH_DURATION: Number.isFinite(parseInt(process.env.LAUNCH_DURATION || '', 10)) ? parseInt(process.env.LAUNCH_DURATION as string, 10) : 90,
-  // File store path for installs counters - single source of truth
-  STORE_FILE: process.env.STATS_JSON_FILE || '/home/mandersj/telemetary.jwc.minigem.uk/data/installs.json'
+  // File store path for installs counters
+  STORE_FILE: process.env.STATS_JSON_FILE || path.join(process.env.LOG_DIR || '/opt/jwc-telemetry/logs', 'installs.json')
 };
