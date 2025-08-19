@@ -1,8 +1,22 @@
 import path from 'path';
 
+// Resolve port: require platform-provided PORT in production, fall back to 3000 only for local dev
+function resolvePort(): number {
+  const raw = process.env.PORT;
+  const n = raw && /^\d+$/.test(raw) ? parseInt(raw, 10) : NaN;
+  const isProd = ['production', 'prod'].includes(String(process.env.NODE_ENV || '').toLowerCase());
+  if (Number.isFinite(n)) return n as number;
+  if (isProd) {
+    // In production environments (e.g., A2 Hosting), PORT must be injected by the platform.
+    // Do not silently pick an arbitrary port which would cause 503s behind the proxy.
+    throw new Error('PORT environment variable is not set or invalid in production');
+  }
+  return 3000; // dev fallback
+}
+
 export const CONFIG = {
-  // HTTP server port: always prefer platform-injected PORT; never default to DB port
-  PORT: Number.isFinite(parseInt(process.env.PORT || '', 10)) ? parseInt(process.env.PORT as string, 10) : 3000,
+  // HTTP server port
+  PORT: resolvePort(),
   LOG_DIR: process.env.LOG_DIR || '/opt/jwc-telemetry/logs/events-transformed',
   MAX_BODY: 64 * 1024,
   YEARLY_SALT: process.env.YEARLY_SALT || 'jwc-2025-salt',
