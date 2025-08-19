@@ -72,6 +72,18 @@ async function main() {
     PHUSION_PASSENGER_PORT: process.env.PHUSION_PASSENGER_PORT || null,
     SERVER_PORT: process.env.SERVER_PORT || null
   });
+  // Log all env vars that contain 'port' to find Passenger's port variable
+  const portEnvs = Object.keys(process.env).filter(k => k.toLowerCase().includes('port')).reduce((acc, k) => {
+    acc[k] = process.env[k];
+    return acc;
+  }, {} as Record<string, string | undefined>);
+  log.info('boot.all.port.envs', portEnvs);
+  // Log Passenger-specific env vars
+  const passengerEnvs = Object.keys(process.env).filter(k => k.toLowerCase().includes('passenger')).reduce((acc, k) => {
+    acc[k] = process.env[k];
+    return acc;
+  }, {} as Record<string, string | undefined>);
+  log.info('boot.passenger.envs', passengerEnvs);
   log.info('boot.geo.init.start');
   await initGeo();
   log.info('boot.geo.init.done');
