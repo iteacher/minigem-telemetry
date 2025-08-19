@@ -982,9 +982,12 @@
         };
       }
 
-      async function loadData() {
+    async function loadData() {
         try {
-          const response = await fetch('/stats/install');
+      const qs = new URLSearchParams(window.location.search);
+      const apiOverride = qs.get('api') || (window.API_BASE || '');
+      const base = apiOverride ? apiOverride.replace(/\/$/, '') : '';
+      const response = await fetch(`${base}/stats/install`, { credentials: 'omit' });
           if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
           }
