@@ -8,7 +8,11 @@ function resolvePort(): number {
     process.env.APP_PORT as string | undefined,
     process.env.PORT0 as string | undefined,
     process.env.WEB_PORT as string | undefined,
-    process.env.HTTP_PORT as string | undefined
+    process.env.HTTP_PORT as string | undefined,
+    // Passenger-specific port variables
+    process.env.PASSENGER_PORT as string | undefined,
+    process.env.PHUSION_PASSENGER_PORT as string | undefined,
+    process.env.SERVER_PORT as string | undefined
   ].filter(Boolean) as string[];
   for (const raw of candidates) {
     if (/^\d+$/.test(raw)) {

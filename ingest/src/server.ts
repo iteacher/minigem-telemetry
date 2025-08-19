@@ -67,7 +67,10 @@ async function main() {
     APP_PORT: process.env.APP_PORT || null,
     PORT0: process.env.PORT0 || null,
     WEB_PORT: process.env.WEB_PORT || null,
-    HTTP_PORT: process.env.HTTP_PORT || null
+    HTTP_PORT: process.env.HTTP_PORT || null,
+    PASSENGER_PORT: process.env.PASSENGER_PORT || null,
+    PHUSION_PASSENGER_PORT: process.env.PHUSION_PASSENGER_PORT || null,
+    SERVER_PORT: process.env.SERVER_PORT || null
   });
   log.info('boot.geo.init.start');
   await initGeo();
