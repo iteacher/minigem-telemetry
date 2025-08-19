@@ -115,7 +115,7 @@ async function main() {
       const raw: any = (req as any).body;
       const schema = typeof raw?.schema === 'string' ? raw.schema.trim().toLowerCase() : '';
       if (schema !== 'jwc.v1') {
-        log.warn('schema not supported', { got: raw?.schema });
+  log.warn('schema not supported', { got: raw?.schema });
         return reply.code(400).send({ error: 'schema_unsupported', expected: 'jwc.v1' });
       }
 
