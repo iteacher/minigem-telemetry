@@ -1,4 +1,5 @@
 import maxmind from 'maxmind';
+import { log } from './logger.js';
 
 // Simple MaxMind GeoLite2 Country reader
 let reader: any | undefined;
@@ -6,14 +7,14 @@ let reader: any | undefined;
 export async function initGeo() {
   const path = process.env.GEO_MMDB;
   if (!path) {
-    console.warn('geo: GEO_MMDB not set; country lookups will be Unknown unless provider headers are present');
+  log.warn('geo.init.no_mmdb', 'GEO_MMDB not set; headers-only geolocation');
     return;
   }
   try {
     reader = await maxmind.open(path);
-    console.log('geo: loaded mmdb from', path);
+  log.info('geo.init.loaded', { path });
   } catch (e) {
-    console.error('geo: failed to open mmdb', e);
+  log.error('geo.init.failed', String(e));
   }
 }
 

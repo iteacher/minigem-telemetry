@@ -45,6 +45,7 @@ type Store = {
 };
 
 const FILE = CONFIG.STORE_FILE;
+import { log } from './logger.js';
 
 function ensureDirExists(filePath: string) {
   const dir = path.dirname(filePath);
@@ -213,14 +214,17 @@ function serialize<T>(fn: () => Promise<T> | T): Promise<T> {
 export async function storeInit(): Promise<void> {
   // Ensure file exists
   await serialize(async () => {
+    log.info('store.init', { file: FILE });
     // Ensure store file exists and perform rollup if launch window expired
     const s = readStore();
     // Write to ensure file exists
     writeStore(s);
     try {
+      log.info('store.rollup.check', { launchDate: CONFIG.LAUNCH_DATE, duration: CONFIG.LAUNCH_DURATION });
       await rollupLaunchWindowIfExpired();
     } catch (e) {
       // swallow - rollup failures should not block startup
+      log.warn('store.rollup.error', String(e));
     }
   });
 }
@@ -253,8 +257,10 @@ export async function rollupLaunchWindowIfExpired() {
 
       s.launchRolledUp = true;
       writeStore(s);
+  log.info('store.rollup.done');
     } catch (e) {
       // ignore errors during rollup
+  log.warn('store.rollup.failed', String(e));
     }
   });
 }

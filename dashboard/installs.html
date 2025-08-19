@@ -987,12 +987,19 @@
       const qs = new URLSearchParams(window.location.search);
       const apiOverride = qs.get('api') || (window.API_BASE || '');
       const base = apiOverride ? apiOverride.replace(/\/$/, '') : '';
-      const response = await fetch(`${base}/stats/install`, { credentials: 'omit' });
+      const originBase = window.location.origin;
+      const apiUrl = `${base}/stats/install`;
+      console.log('[dashboard] boot', { origin: originBase, apiOverride, apiBase: base || '(origin)', url: apiUrl });
+      const t0 = performance.now();
+      const response = await fetch(apiUrl, { credentials: 'omit' });
+      const t1 = performance.now();
+      console.log('[dashboard] fetch.done', { status: response.status, ms: Math.round(t1 - t0) });
           if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
           }
           
           const data = await response.json();
+          console.log('[dashboard] data.keys', Object.keys(data || {}));
           updateDashboard(data);
         } catch (error) {
           console.error('Failed to load data:', error);
@@ -1106,7 +1113,8 @@
           adaptiveMonthly = getAdaptiveTimelineData(monthlyValues, monthlyMonths, { from, to });
         }
         
-        createOrUpdateChart('#monthlyChart', {
+  console.log('[dashboard] render.monthly', { points: adaptiveMonthly.data.length, unit: adaptiveMonthly.timeUnit });
+  createOrUpdateChart('#monthlyChart', {
           type: 'line',
           data: {
             labels: adaptiveMonthly.labels,
