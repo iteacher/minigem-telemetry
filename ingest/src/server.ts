@@ -1,10 +1,10 @@
 import Fastify, { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import rateLimit from '@fastify/rate-limit';
-import { CONFIG } from './config.js';
-import { validateEnvelope, validateEvent, normalizeEvent } from './validate.js';
-import { initGeo, lookup } from './geo.js';
-import { log } from './logger.js';
-import { storeInit, storeUpsertInstall, storeReadInstallStats, pathToStore } from './store.js';
+import { CONFIG } from './config';
+import { validateEnvelope, validateEvent, normalizeEvent } from './validate';
+import { initGeo, lookup } from './geo';
+import { log } from './logger';
+import { storeInit, storeUpsertInstall, storeReadInstallStats, pathToStore } from './store';
 
 function h(req: FastifyRequest, name: string): string | undefined {
   const v = req.headers[name.toLowerCase()];
