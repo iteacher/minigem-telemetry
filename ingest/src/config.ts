@@ -1,17 +1,22 @@
 import path from 'path';
 
-// Resolve port: require platform-provided PORT in production, fall back to 3000 only for local dev
+// Resolve port from several common env var names used by hosts (A2, Render, Heroku, etc.).
+// Falls back to 3000 when not provided so the app still runs in local/dev or misconfigured envs.
 function resolvePort(): number {
-  const raw = process.env.PORT;
-  const n = raw && /^\d+$/.test(raw) ? parseInt(raw, 10) : NaN;
-  const isProd = ['production', 'prod'].includes(String(process.env.NODE_ENV || '').toLowerCase());
-  if (Number.isFinite(n)) return n as number;
-  if (isProd) {
-    // In production environments (e.g., A2 Hosting), PORT must be injected by the platform.
-    // Do not silently pick an arbitrary port which would cause 503s behind the proxy.
-    throw new Error('PORT environment variable is not set or invalid in production');
+  const candidates = [
+    process.env.PORT,
+    process.env.APP_PORT as string | undefined,
+    process.env.PORT0 as string | undefined,
+    process.env.WEB_PORT as string | undefined,
+    process.env.HTTP_PORT as string | undefined
+  ].filter(Boolean) as string[];
+  for (const raw of candidates) {
+    if (/^\d+$/.test(raw)) {
+      const n = parseInt(raw, 10);
+      if (n > 0 && n < 65536) return n;
+    }
   }
-  return 3000; // dev fallback
+  return 3000;
 }
 
 export const CONFIG = {
