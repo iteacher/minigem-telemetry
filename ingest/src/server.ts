@@ -57,8 +57,15 @@ async function main() {
   // Global and per-request logging
   process.on('uncaughtException', (e) => log.error('uncaughtException', String(e)));
   process.on('unhandledRejection', (e) => log.error('unhandledRejection', String(e)));
-  app.addHook('onRequest', async (req) => { log.info('req', { method: req.method, url: req.url, ip: (req as any).ip }); });
-  app.addHook('onResponse', async (req, reply) => { log.info('res', { method: req.method, url: req.url, status: reply.statusCode }); });
+  
+  // Log ALL incoming requests to debug routing issues
+  app.addHook('onRequest', async (req) => { 
+    log.info('req', { method: req.method, url: req.url, ip: (req as any).ip, headers: req.headers });
+  });
+  app.addHook('onResponse', async (req, reply) => { 
+    log.info('res', { method: req.method, url: req.url, status: reply.statusCode });
+  });
+  
   log.info('boot.start', { port: CONFIG.PORT });
   await initGeo();
   await storeInit();
@@ -143,6 +150,17 @@ async function main() {
       log.error('server_error', e);
       return reply.code(500).send({ error: 'server_error' });
     }
+  });
+
+  // Add a catch-all route to debug what requests are coming in
+  app.all('*', async (req, reply) => {
+    log.info('catchall', { method: req.method, url: req.url });
+    return reply.code(200).send({
+      message: 'Debug - request received but no route matched',
+      method: req.method,
+      url: req.url,
+      timestamp: new Date().toISOString()
+    });
   });
 
   try {
