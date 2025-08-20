@@ -215,13 +215,21 @@ export async function storeInit(): Promise<void> {
   // Ensure file exists
   await serialize(async () => {
     log.info('store.init', { file: FILE });
-    // Ensure store file exists and perform rollup if launch window expired
-    const s = readStore();
-    // Write to ensure file exists
-    writeStore(s);
+    try {
+      // Ensure store file exists and perform rollup if launch window expired
+      const s = readStore();
+      // Write to ensure file exists
+      writeStore(s);
+      log.info('store.init.file.created', { file: FILE });
+    } catch (e) {
+      log.error('store.init.file.error', { file: FILE, error: String(e) });
+      throw e;
+    }
+    
     try {
       log.info('store.rollup.check', { launchDate: CONFIG.LAUNCH_DATE, duration: CONFIG.LAUNCH_DURATION });
       await rollupLaunchWindowIfExpired();
+      log.info('store.rollup.check.done');
     } catch (e) {
       // swallow - rollup failures should not block startup
       log.warn('store.rollup.error', String(e));

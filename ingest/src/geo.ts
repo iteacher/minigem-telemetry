@@ -5,9 +5,9 @@ import { log } from './logger.js';
 let reader: any | undefined;
 
 export async function initGeo() {
-  const path = process.env.GEO_MMDB;
+  const path = process.env.GEO_MMDB || process.env.GEO_DB;
   if (!path) {
-  log.warn('geo.init.no_mmdb', 'GEO_MMDB not set; headers-only geolocation');
+  log.warn('geo.init.no_mmdb', 'GEO_MMDB/GEO_DB not set; headers-only geolocation');
     return;
   }
   try {

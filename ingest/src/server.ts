@@ -55,8 +55,16 @@ function resolveGeo(req: FastifyRequest, ip: string): { country: string; region:
 async function main() {
   const app: FastifyInstance = Fastify({ logger: false, bodyLimit: CONFIG.MAX_BODY, trustProxy: true });
   // Global and per-request logging
-  process.on('uncaughtException', (e) => log.error('uncaughtException', String(e)));
-  process.on('unhandledRejection', (e) => log.error('unhandledRejection', String(e)));
+  process.on('uncaughtException', (e) => {
+    log.error('uncaughtException', String(e));
+    console.error('UNCAUGHT EXCEPTION:', e);
+    process.exit(1);
+  });
+  process.on('unhandledRejection', (e) => {
+    log.error('unhandledRejection', String(e));
+    console.error('UNHANDLED REJECTION:', e);
+    process.exit(1);
+  });
   
   // Log ALL incoming requests to debug routing issues
   app.addHook('onRequest', async (req) => { 
@@ -67,9 +75,26 @@ async function main() {
   });
   
   log.info('boot.start', { port: CONFIG.PORT });
-  await initGeo();
-  await storeInit();
-  log.info('boot.store.ready', { file: pathToStore() });
+  
+  try {
+    log.info('boot.geo.start');
+    await initGeo();
+    log.info('boot.geo.done');
+  } catch (e) {
+    log.error('boot.geo.failed', String(e));
+    console.error('GEO INIT FAILED:', e);
+    // Continue without geo - it's not critical
+  }
+  
+  try {
+    log.info('boot.store.start');
+    await storeInit();
+    log.info('boot.store.done', { file: pathToStore() });
+  } catch (e) {
+    log.error('boot.store.failed', String(e));
+    console.error('STORE INIT FAILED:', e);
+    throw e; // Store is critical - fail if it doesn't work
+  }
 
   log.info('boot.register.rateLimit.start');
   await app.register(rateLimit, { max: CONFIG.RATE_LIMIT_MAX, timeWindow: CONFIG.RATE_LIMIT_TIME_WINDOW });
@@ -179,10 +204,16 @@ async function main() {
     
     const address = app.server.address();
     log.info('boot.listen.ok', { address, configPort: CONFIG.PORT });
+    console.log(`Server listening on ${listenHost}:${listenPort}`);
   } catch (e: any) {
     log.error('boot.listen.error', { error: String(e?.message || e) });
+    console.error('LISTEN ERROR:', e);
     throw e;
   }
 }
 
-main().catch(err => { log.error('fatal', String(err)); process.exit(1); });
+main().catch(err => { 
+  log.error('fatal', String(err)); 
+  console.error('FATAL ERROR:', err);
+  process.exit(1); 
+});
