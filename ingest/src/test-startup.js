@@ -61,10 +61,10 @@ console.log('\n=== Port Check ===');
 const net = require('net');
 const testPort = process.env.PORT || 3000;
 
-const server = net.createServer();
-server.listen(testPort, '0.0.0.0', () => {
+const portTestServer = net.createServer();
+portTestServer.listen(testPort, '0.0.0.0', () => {
   console.log(`✓ Port ${testPort} is available`);
-  server.close();
+  portTestServer.close();
 }).on('error', (err) => {
   if (err.code === 'EADDRINUSE') {
     console.log(`✗ Port ${testPort} is already in use`);
@@ -106,5 +106,75 @@ try {
 } catch (e) {
   console.log('✗ Geo load failed:', e.message);
 }
+
+console.log('\n=== Starting Minimal Test Server ===');
+
+// Start a minimal test server to serve the /stats/install endpoint
+const http = require('http');
+
+const httpServer = http.createServer((req, res) => {
+  console.log(`Request: ${req.method} ${req.url}`);
+  
+  // Set CORS headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Content-Type', 'application/json');
+  
+  if (req.method === 'OPTIONS') {
+    res.writeHead(200);
+    res.end();
+    return;
+  }
+  
+  if (req.url === '/stats/install') {
+    const response = {
+      from: '2025-07-01',
+      to: '2025-08-20',
+      windowMonths: 2,
+      totalMonths: 2,
+      installsTotal: 123,
+      monthlyInstalls: {
+        months: ['2025-07', '2025-08'],
+        counts: [45, 78]
+      },
+      dailyInstalls: {
+        dates: ['2025-07-01', '2025-08-01'],
+        counts: [45, 78]
+      },
+      byExt: { '1.1.31': 123 },
+      byOs: { 'darwin-arm64': 123 },
+      byCountry: { 'US': 123 },
+      updatedAt: new Date().toISOString(),
+      file: '/test/debug.json',
+      debug: true,
+      message: 'Test server running successfully'
+    };
+    
+    res.writeHead(200);
+    res.end(JSON.stringify(response, null, 2));
+    return;
+  }
+  
+  if (req.url === '/health') {
+    res.writeHead(200);
+    res.end(JSON.stringify({ ok: true, timestamp: new Date().toISOString() }));
+    return;
+  }
+  
+  // Default response
+  res.writeHead(200);
+  res.end(JSON.stringify({ 
+    message: 'Test server', 
+    url: req.url, 
+    timestamp: new Date().toISOString() 
+  }));
+});
+
+const port = process.env.PORT || 3000;
+httpServer.listen(port, '0.0.0.0', () => {
+  console.log(`✓ Test server listening on port ${port}`);
+  console.log(`✓ Test URL: http://localhost:${port}/stats/install`);
+});
 
 console.log('\n=== Debug Complete ===');
