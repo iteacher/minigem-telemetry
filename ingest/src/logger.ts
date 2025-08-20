@@ -5,7 +5,7 @@ import { CONFIG } from './config.js';
 type Level = 'debug' | 'info' | 'warn' | 'error';
 const LEVELS: Record<Level, number> = { debug: 10, info: 20, warn: 30, error: 40 };
 
-const LOG_FILE = process.env.LOG_FILE || (CONFIG as any)?.LOG_FILE || '/tmp/jwc-telemetry.log';
+const LOG_FILE = process.env.LOG_FILE || './logs/jwc-telemetry.log';
 const LOG_LEVEL = ((process.env.LOG_LEVEL || (CONFIG as any)?.LOG_LEVEL || 'info').toString().toLowerCase()) as Level;
 
 let stream: fs.WriteStream | null = null;
