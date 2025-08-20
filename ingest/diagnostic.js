@@ -47,14 +47,38 @@ console.log('[DIAG] Attempting to create HTTP server on port:', port);
 
 const server = http.createServer((req, res) => {
   console.log('[DIAG] Request received:', req.method, req.url);
-  res.writeHead(200, { 'Content-Type': 'application/json' });
-  res.end(JSON.stringify({
+  
+  let response = {
     status: 'ok',
     message: 'Diagnostic server running',
     timestamp: new Date().toISOString(),
     nodeVersion: process.version,
-    port: port
-  }));
+    port: port,
+    cwd: process.cwd(),
+    env: {
+      PORT: process.env.PORT,
+      NODE_ENV: process.env.NODE_ENV,
+      HOME: process.env.HOME
+    }
+  };
+  
+  // Test if we can load our main dependencies
+  try {
+    require('fastify');
+    response.fastify = 'available';
+  } catch (err) {
+    response.fastify = 'error: ' + err.message;
+  }
+  
+  try {
+    require('@fastify/rate-limit');
+    response.rateLimit = 'available';
+  } catch (err) {
+    response.rateLimit = 'error: ' + err.message;
+  }
+  
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify(response, null, 2));
 });
 
 server.listen(port, '0.0.0.0', () => {
