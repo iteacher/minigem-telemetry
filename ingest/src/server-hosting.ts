@@ -219,10 +219,17 @@ async function main() {
     });
   });
 
+  // For a2hosting environments, check if we should let them handle the port binding
+  if (process.env.NODE_ENV === 'production' || process.env.PASSENGER_APP_ENV) {
+    log.info('boot.hosting.detected', { env: process.env.NODE_ENV, passenger: process.env.PASSENGER_APP_ENV });
+    console.log('✓ Server configured for hosting environment');
+    return app; // Let hosting environment handle the listen
+  }
+
+  // Only bind port if we're not in a hosting environment
   try {
-    // For hosting: if no PORT env var, let system assign port (use 0)
-    const listenPort = process.env.PORT ? parseInt(process.env.PORT) : 0;
-    const listenHost = process.env.PORT ? '0.0.0.0' : 'localhost';
+    const listenPort = process.env.PORT ? parseInt(process.env.PORT) : 3000;
+    const listenHost = '0.0.0.0';
     
     log.info('boot.listen.start', { 
       configPort: CONFIG.PORT, 
@@ -239,11 +246,25 @@ async function main() {
   } catch (e: any) {
     log.error('boot.listen.error', { error: String(e?.message || e) });
     console.error('LISTEN ERROR:', e);
+    
+    // If listen fails, still return the app - hosting might handle it
+    if (e.message && e.message.includes('listen() was called more than once')) {
+      log.info('boot.listen.hosting_managed', { note: 'Hosting environment managing port binding' });
+      console.log('✓ Server configured, port managed by hosting environment');
+      return app;
+    }
     throw e;
   }
+
+  return app;
 }
 
-main().catch(err => { 
+main().then(app => {
+  if (app) {
+    log.info('boot.complete', { message: 'Server initialization complete' });
+    console.log('✓ Server initialization complete');
+  }
+}).catch(err => { 
   log.error('fatal', String(err)); 
   console.error('FATAL ERROR:', err);
   process.exit(1); 
