@@ -146,9 +146,21 @@ async function main() {
   });
 
   try {
-    log.info('boot.listen.start', { port: CONFIG.PORT, host: '0.0.0.0' });
-    await app.listen({ port: CONFIG.PORT, host: '0.0.0.0' });
-    log.info('boot.listen.ok', { url: `http://0.0.0.0:${CONFIG.PORT}` });
+    // For Passenger: if no PORT env var, let system assign port (use 0)
+    const listenPort = process.env.PORT ? parseInt(process.env.PORT) : 0;
+    const listenHost = process.env.PORT ? '0.0.0.0' : 'localhost';
+    
+    log.info('boot.listen.start', { 
+      configPort: CONFIG.PORT, 
+      envPort: process.env.PORT, 
+      listenPort, 
+      listenHost 
+    });
+    
+    await app.listen({ port: listenPort, host: listenHost });
+    
+    const address = app.server.address();
+    log.info('boot.listen.ok', { address, configPort: CONFIG.PORT });
   } catch (e: any) {
     log.error('boot.listen.error', { error: String(e?.message || e) });
     throw e;
