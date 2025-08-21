@@ -8,11 +8,16 @@ console.log('[server] Starting fully operational telemetry server...');
 // Configuration for production deployment
 const CONFIG = {
   PORT: process.env.PORT || 3001,
-  DATA_FILE: '/home/mandersj/telemetary.jwc.minigem.uk/data/test3.json',
-  LOCAL_DATA_FILE: './data/test3.json', // Fallback for local testing
-  LOG_FILE: './logs/telemetry.log',
-  LAUNCH_DATE: '2025-07-23', // Launch window start date
-  LAUNCH_DURATION: 90 // Days for launch window tracking
+  DATA_FILE: process.env.STATS_JSON_FILE || '/home/mandersj/telemetary.jwc.minigem.uk/data/test-success-95days.json',
+  LOCAL_DATA_FILE: './data/test-success-95days.json', // Fallback for local testing
+  LOG_FILE: process.env.LOG_FILE || './logs/telemetry.log',
+  LAUNCH_DATE: process.env.LAUNCH_DATE || '2025-07-22', // Matches hosting env
+  LAUNCH_DURATION: parseInt(process.env.LAUNCH_DURATION || '100'), // Extended for 95+ day testing
+  GEO_DB: process.env.GEO_DB || process.env.GEO_MMDB, // Support both env var names
+  YEARLY_SALT: process.env.YEARLY_SALT || 'jwc-2025-salt',
+  RATE_LIMIT_MAX: parseInt(process.env.RATE_LIMIT_MAX || '2000'),
+  STATS_SECRET: process.env.STATS_SECRET,
+  STATS_WINDOW_DAYS: parseInt(process.env.STATS_WINDOW_DAYS || '7')
 };
 
 console.log('[server] Configuration:', CONFIG);

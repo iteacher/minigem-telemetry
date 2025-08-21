@@ -8,11 +8,16 @@ console.log('[server] Starting fully operational telemetry server...');
 // Configuration for production deployment
 const CONFIG = {
   PORT: process.env.PORT || 3001,
-  DATA_FILE: '/home/mandersj/telemetary.jwc.minigem.uk/data/test3.json',
-  LOCAL_DATA_FILE: './data/test3.json', // Fallback for local testing
-  LOG_FILE: './logs/telemetry.log',
-  LAUNCH_DATE: '2025-07-23', // Launch window start date
-  LAUNCH_DURATION: 90 // Days for launch window tracking
+  DATA_FILE: process.env.STATS_JSON_FILE || '/home/mandersj/telemetary.jwc.minigem.uk/data/test-success-95days.json',
+  LOCAL_DATA_FILE: './data/test-success-95days.json', // Fallback for local testing
+  LOG_FILE: process.env.LOG_FILE || './logs/telemetry.log',
+  LAUNCH_DATE: process.env.LAUNCH_DATE || '2025-07-22', // Matches hosting env
+  LAUNCH_DURATION: parseInt(process.env.LAUNCH_DURATION || '100'), // Extended for 95+ day testing
+  GEO_DB: process.env.GEO_DB || process.env.GEO_MMDB, // Support both env var names
+  YEARLY_SALT: process.env.YEARLY_SALT || 'jwc-2025-salt',
+  RATE_LIMIT_MAX: parseInt(process.env.RATE_LIMIT_MAX || '2000'),
+  STATS_SECRET: process.env.STATS_SECRET,
+  STATS_WINDOW_DAYS: parseInt(process.env.STATS_WINDOW_DAYS || '7')
 };
 
 console.log('[server] Configuration:', CONFIG);
@@ -69,18 +74,38 @@ function calculateAnalytics(data) {
   
   // Extract basic metrics
   const totalInstalls = Object.values(data.byExt || {}).reduce((sum, count) => sum + count, 0);
-  const monthKeys = ['2025-07', '2025-08'];
-  const monthCounts = [
-    data.months?.['2025']?.['07']?.installs || 0,
-    data.months?.['2025']?.['08']?.installs || 0
-  ];
+  
+  // Dynamically calculate date range from available data
+  const allMonths = [];
+  const allCounts = [];
+  
+  if (data.months) {
+    Object.keys(data.months).forEach(year => {
+      Object.keys(data.months[year]).forEach(month => {
+        const monthKey = `${year}-${month}`;
+        const installs = data.months[year][month].installs || 0;
+        allMonths.push(monthKey);
+        allCounts.push(installs);
+      });
+    });
+  }
+  
+  // Sort months chronologically
+  const sortedData = allMonths.map((month, i) => ({ month, count: allCounts[i] }))
+    .sort((a, b) => a.month.localeCompare(b.month));
+  
+  const monthKeys = sortedData.map(item => item.month);
+  const monthCounts = sortedData.map(item => item.count);
+  const fromMonth = monthKeys[0] || 'N/A';
+  const toMonth = monthKeys[monthKeys.length - 1] || 'N/A';
+  const totalMonths = monthKeys.length;
   
   // Build comprehensive analytics
   const analytics = {
-    from: '2025-07',
-    to: '2025-08',
-    windowMonths: 2,
-    totalMonths: 2,
+    from: fromMonth,
+    to: toMonth,
+    windowMonths: totalMonths,
+    totalMonths: totalMonths,
     installsTotal: totalInstalls,
     
     // Core metrics
@@ -161,28 +186,36 @@ function expandCountryCodes(byCountry) {
 }
 
 function buildVersionTimeline(versionsByMonth, versions) {
+  // Get all available months dynamically
+  const allMonths = Object.keys(versionsByMonth).sort();
   const timeline = {};
+  
   versions.forEach(version => {
-    timeline[version] = [
-      versionsByMonth['2025-07']?.[version] || 0,
-      versionsByMonth['2025-08']?.[version] || 0
-    ];
+    timeline[version] = allMonths.map(month => 
+      versionsByMonth[month]?.[version] || 0
+    );
   });
+  
   return timeline;
 }
 
 function buildOsTimeline(osByMonth, osTypes) {
+  // Get all available months dynamically
+  const allMonths = Object.keys(osByMonth).sort();
   const timeline = {};
+  
   osTypes.forEach(os => {
-    timeline[os] = [
-      osByMonth['2025-07']?.[os] || 0,
-      osByMonth['2025-08']?.[os] || 0
-    ];
+    timeline[os] = allMonths.map(month => 
+      osByMonth[month]?.[os] || 0
+    );
   });
+  
   return timeline;
 }
 
 function buildGeoTimeline(geoByMonth, byCountry) {
+  // Get all available months dynamically
+  const allMonths = Object.keys(geoByMonth).sort();
   const timeline = {};
   const expandedCountries = expandCountryCodes(byCountry);
   
@@ -190,10 +223,9 @@ function buildGeoTimeline(geoByMonth, byCountry) {
     const code = Object.keys(byCountry).find(code => 
       expandCountryCodes({[code]: 1})[country]
     );
-    timeline[country] = [
-      geoByMonth['2025-07']?.[code] || 0,
-      geoByMonth['2025-08']?.[code] || 0
-    ];
+    timeline[country] = allMonths.map(month =>
+      geoByMonth[month]?.[code] || 0
+    );
   });
   return timeline;
 }
